@@ -5,51 +5,48 @@ import { useEffect, useState } from "react";
 /**
  * The wax seal being pressed, once, before the landing appears.
  *
- * Ported from the handoff's own keyframes. Two changes, both about not making
- * a first-time flourish into a permanent tax:
+ * Ported from the handoff's own keyframes, with two changes about not making a
+ * first-time flourish into a permanent tax: it plays once per browser session
+ * rather than once per navigation, and it is skipped under
+ * `prefers-reduced-motion`.
  *
- *   - It plays once per browser session, not once per navigation. Coming back
- *     from a round page to watch a 2.8 second logo animation again is the kind
- *     of thing that reads as charming on the first view and as an obstacle on
- *     the fourth.
- *   - It is skipped entirely under `prefers-reduced-motion`, and skipped
- *     without a flash: the initial state is read synchronously in the very
- *     first render, so a reader who asked for no motion never sees a frame of
- *     it. Doing this in an effect would show the intro and then rip it away,
- *     which is worse than not honouring the preference at all.
+ * **It renders by default, and that is the whole point.** This component used
+ * to start hidden and switch itself on in an effect, which put the animation
+ * AFTER the first paint: the landing appeared, hydration ran, and only then did
+ * the seal drop over the top of a page the reader had already started reading.
+ * The old docstring claimed the decision was made "synchronously in the very
+ * first render" - it was not, and the delay everybody could see was the proof.
+ *
+ * The decision now lives in the boot script in `app/layout.tsx`, which runs in
+ * `<head>` before anything paints and stamps `data-intro="skip"` when the
+ * animation should not play. `cinematic.css` hides the overlay on that
+ * attribute, so a reader who asked for no motion never sees a frame of it and
+ * somebody on their fourth page view never sees it either - while a first-time
+ * visitor gets it as the first thing on screen, which is where it belongs.
+ *
+ * All this component does is take the finished overlay out of the tree.
  */
-const SEEN = "cachet:intro-seen";
-
 export default function Intro() {
-  const [show, setShow] = useState(false);
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion:reduce)").matches;
-    let seen = false;
-    try {
-      seen = window.sessionStorage.getItem(SEEN) === "1";
-    } catch {
-      // Storage blocked. Treat that as "not seen": one animation is a far
-      // smaller cost than a crash on a page whose whole job is a first
-      // impression.
-    }
-    if (reduced || seen) return;
-    setShow(true);
-    try {
-      window.sessionStorage.setItem(SEEN, "1");
-    } catch {
-      /* see above */
+    // Already decided against in <head>; drop it immediately. It is display:none
+    // by then, so nothing moves on screen.
+    if (document.documentElement.getAttribute("data-intro") === "skip") {
+      setDone(true);
+      return;
     }
     // 2180ms delay + 620ms fade in the handoff's `lg-out`.
-    const t = setTimeout(() => setShow(false), 2900);
+    const t = setTimeout(() => setDone(true), 2900);
     return () => clearTimeout(t);
   }, []);
 
-  if (!show) return null;
+  if (done) return null;
 
   return (
     <div
       aria-hidden="true"
+      className="cine-intro"
       style={{
         position: "absolute",
         inset: 0,

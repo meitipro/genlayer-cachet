@@ -102,6 +102,33 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               "catch(e){document.documentElement.setAttribute('data-theme','dark')}",
           }}
         />
+        {/*
+          Whether the entry animation plays, decided before the first frame for
+          the same reason the theme is.
+
+          The intro used to switch itself on inside an effect, so the real
+          sequence was: paint the landing, hydrate, THEN drop the seal animation
+          on top of a page the reader was already looking at. It read as the
+          animation arriving late because it was arriving late - it is meant to
+          be the first thing on screen, not an interruption of the second.
+
+          The overlay is in the server HTML now, so it is in the first paint.
+          This decides synchronously whether to keep it, and CSS does the
+          hiding, which is what keeps the server and client markup identical
+          and the hydration quiet. Marking it seen here rather than in the
+          effect matters too: the flag has to be set before a second render can
+          read it.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var s=sessionStorage.getItem('cachet:intro-seen')==='1';" +
+              "var r=matchMedia('(prefers-reduced-motion:reduce)').matches;" +
+              "if(s||r){document.documentElement.setAttribute('data-intro','skip')}" +
+              "else{sessionStorage.setItem('cachet:intro-seen','1')}}" +
+              "catch(e){}",
+          }}
+        />
       </head>
       {/* No chrome here on purpose. The two route groups bring their own: the
           cinematic route is a fixed full-viewport app, and everything else

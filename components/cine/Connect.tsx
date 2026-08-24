@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Mark } from "./Mark";
@@ -10,118 +10,117 @@ import { readableError } from "@/components/wallet";
 /**
  * The wallet step between the landing and the dApp.
  *
- * Two named wallets and a paste box, which is three different promises, so the
- * screen has to keep them apart:
+ * It lists the EVM wallets actually installed in THIS browser, discovered
+ * through EIP-6963, each under its own name and its own icon. Nothing is
+ * hardcoded: an earlier version offered a fixed "GenLayer" and "MetaMask"
+ * pair, and there is no GenLayer wallet extension - so one of the two buttons
+ * named something that cannot be installed, while a reader using Rabby, Brave,
+ * Coinbase Wallet or anything else saw no way in at all.
  *
- * - **GenLayer / MetaMask** connect a signer. The button names a wallet, so it
- *   has to reach THAT wallet: `window.ethereum` is whichever extension won the
- *   race to inject itself, and with two installed, clicking "MetaMask" through
- *   it can hand back a GenLayer account. Every address here is a bidder
- *   identity bound into a commitment hash, so connecting the wrong one is not
- *   cosmetic. EIP-6963 is how a page asks for a wallet by name, and it is what
- *   this uses.
- * - **Paste an address** proves nothing at all and is not offered as if it
- *   did. It opens that address's public record, which is readable by anyone
- *   with or without a wallet. It never becomes a connected session, because
- *   typing an address is not evidence of holding its key.
+ * Discovery rather than `window.ethereum` matters beyond the list, too. With
+ * two wallets installed, `window.ethereum` is whichever extension won the race
+ * to inject itself, so a button labelled with one wallet can hand back an
+ * account from another. Every address here becomes a bidder identity bound
+ * into a commitment hash, so connecting the wrong one is not cosmetic.
  *
- * A wallet that is not installed says so. The alternative - quietly falling
- * back to whatever else is injected - is the failure this screen exists to
- * avoid.
+ * There is no way in without a wallet. Typing an address is not evidence of
+ * holding its key, and this screen does not pretend otherwise - the paste box
+ * that used to sit here is gone. Public records stay public and reachable from
+ * the docket, which needs no wallet and claims nothing about who is reading.
  */
 
 /** What an EIP-6963 wallet announces about itself. */
 type ProviderInfo = { uuid: string; name: string; rdns: string; icon: string };
-type Eip1193 = { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> };
+type Eip1193 = {
+  request: (a: { method: string; params?: unknown[] }) => Promise<unknown>;
+};
 type Announced = { info: ProviderInfo; provider: Eip1193 };
 
 /**
- * The wallets this screen offers, in the handoff's order.
+ * Wallets that inject but never announce.
  *
- * Matched on `rdns` first, which is the identifier a wallet controls and
- * therefore the one it cannot be confused about. The name test is a fallback
- * for wallets shipping a non-canonical rdns, and it is deliberately narrow.
+ * EIP-6963 is the standard and every current wallet implements it, but an old
+ * install can still be sitting on `window.ethereum` alone. Rather than drop
+ * that reader at a dead end, it is offered as one clearly generic entry - and
+ * only when nothing announced, so it can never sit next to named wallets
+ * pretending to be a different one.
  */
-const WALLETS = [
-  {
-    key: "genlayer",
-    label: "GenLayer",
-    match: (i: ProviderInfo) =>
-      i.rdns.toLowerCase().includes("genlayer") || /genlayer/i.test(i.name),
-    /** Where to send somebody who does not have it. */
-    site: "https://genlayer.com",
-  },
-  {
-    key: "metamask",
-    label: "MetaMask",
-    match: (i: ProviderInfo) => i.rdns.toLowerCase() === "io.metamask" || /^metamask/i.test(i.name),
-    site: "https://metamask.io/download/",
-  },
-] as const;
+const LEGACY_UUID = "legacy-window-ethereum";
 
-export default function Connect({
-  network,
-  onBack,
-}: {
-  network: string;
-  onBack: () => void;
-}) {
+export default function Connect({ network, onBack }: { network: string; onBack: () => void }) {
   const router = useRouter();
-  const [found, setFound] = useState<Announced[]>([]);
+  const [wallets, setWallets] = useState<Announced[]>([]);
+  /** Null until discovery has had a chance to answer, so "none" is not claimed early. */
+  const [scanned, setScanned] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [missing, setMissing] = useState<(typeof WALLETS)[number] | null>(null);
-  const [typed, setTyped] = useState("");
 
   /**
    * EIP-6963 discovery.
    *
-   * The page listens first and then announces its interest, because wallets
-   * that already fired on page load re-announce on `eip6963:requestProvider`.
-   * Doing it the other way round misses every wallet that was ready before
-   * this component mounted, which is most of them.
+   * Listen first, then ask: wallets that already announced on page load
+   * re-announce on `eip6963:requestProvider`, and doing it the other way round
+   * misses every wallet that was ready before this component mounted, which is
+   * most of them.
    */
   useEffect(() => {
     const onAnnounce = (event: Event) => {
       const detail = (event as CustomEvent<Announced>).detail;
-      if (!detail?.info?.uuid) return;
-      setFound((prev) =>
+      if (!detail?.info?.uuid || !detail.provider) return;
+      setWallets((prev) =>
         prev.some((p) => p.info.uuid === detail.info.uuid) ? prev : [...prev, detail],
       );
     };
     window.addEventListener("eip6963:announceProvider", onAnnounce);
     window.dispatchEvent(new Event("eip6963:requestProvider"));
-    return () => window.removeEventListener("eip6963:announceProvider", onAnnounce);
+
+    // Announcements are synchronous in practice, but a slow extension can be a
+    // frame or two behind. A short grace period keeps "no wallet found" from
+    // flashing up in front of somebody who has one.
+    const t = setTimeout(() => setScanned(true), 350);
+    return () => {
+      window.removeEventListener("eip6963:announceProvider", onAnnounce);
+      clearTimeout(t);
+    };
   }, []);
 
-  const available = useMemo(() => {
-    const map: Record<string, Announced | undefined> = {};
-    for (const w of WALLETS) map[w.key] = found.find((f) => w.match(f.info));
-    return map;
-  }, [found]);
+  /** The announced list, plus a legacy entry only when nothing announced. */
+  const [legacy, setLegacy] = useState<Announced | null>(null);
+  useEffect(() => {
+    if (!scanned || wallets.length > 0) {
+      setLegacy(null);
+      return;
+    }
+    const eth = (window as { ethereum?: Eip1193 }).ethereum;
+    if (!eth) return;
+    setLegacy({
+      info: {
+        uuid: LEGACY_UUID,
+        // Deliberately not guessed at. `isMetaMask` is set by wallets that are
+        // not MetaMask, so a name read off it would be a label we cannot stand
+        // behind on the one screen where the label has to be true.
+        name: "Browser wallet",
+        rdns: LEGACY_UUID,
+        icon: "",
+      },
+      provider: eth,
+    });
+  }, [scanned, wallets.length]);
+
+  const shown = wallets.length > 0 ? wallets : legacy ? [legacy] : [];
 
   const connect = useCallback(
-    async (wallet: (typeof WALLETS)[number]) => {
+    async (wallet: Announced) => {
       setError("");
-      setMissing(null);
-
-      const announced = available[wallet.key];
-      // No silent substitution. `window.ethereum` would answer here, and it is
-      // not necessarily the wallet whose name was on the button.
-      if (!announced) {
-        setMissing(wallet);
-        return;
-      }
-
-      setBusy(wallet.key);
+      setBusy(wallet.info.uuid);
       try {
-        const accounts = (await announced.provider.request({
+        const accounts = (await wallet.provider.request({
           method: "eth_requestAccounts",
         })) as string[];
         if (!accounts?.length) throw new Error("The wallet returned no account.");
 
         try {
-          await announced.provider.request({
+          await wallet.provider.request({
             method: "wallet_switchEthereumChain",
             params: [{ chainId: CHAIN_ID_HEX }],
           });
@@ -129,7 +128,7 @@ export default function Connect({
           // 4902: the wallet has never heard of this chain. Same params object
           // the read client derives from the SDK, so the two cannot drift.
           if ((switchError as { code?: number })?.code === 4902) {
-            await announced.provider.request({
+            await wallet.provider.request({
               method: "wallet_addEthereumChain",
               params: [ADD_CHAIN_PARAMS],
             });
@@ -144,16 +143,8 @@ export default function Connect({
         setBusy(null);
       }
     },
-    [available, router],
+    [router],
   );
-
-  const address = typed.trim();
-  const addressOk = /^0x[0-9a-fA-F]{40}$/.test(address);
-
-  const openRecord = useCallback(() => {
-    if (!addressOk) return;
-    router.push(`/bidders/${address}`);
-  }, [address, addressOk, router]);
 
   return (
     <section
@@ -166,8 +157,8 @@ export default function Connect({
       }}
     >
       {/* The landing's wax bloom, without the video: this screen is a held
-          moment rather than a moving one, and a looping hero behind a wallet
-          prompt reads as decoration competing with a decision. */}
+          moment rather than a moving one. Blooms at the edges, a dark well
+          under the panel, so the text sits on the darkest part of the field. */}
       <div
         aria-hidden="true"
         style={{
@@ -218,12 +209,7 @@ export default function Connect({
             pills overlapped, and the mark alone still reads as the brand. */}
         <span
           className="cn-word"
-          style={{
-            fontWeight: 600,
-            fontSize: 15,
-            letterSpacing: "-.4px",
-            color: "#F1EAD9",
-          }}
+          style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-.4px", color: "#F1EAD9" }}
         >
           Cachet
         </span>
@@ -290,123 +276,181 @@ export default function Connect({
           your wallet
         </h1>
 
-        <p
-          style={{
-            margin: "18px 0 12px",
-            fontFamily: "var(--sans)",
-            fontSize: 12.5,
-            letterSpacing: ".01em",
-            color: "rgba(241,234,217,.56)",
-            animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 140ms both",
-          }}
-        >
-          Continue with
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: 10,
-            animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 200ms both",
-          }}
-        >
-          {WALLETS.map((w) => {
-            const announced = available[w.key];
-            const isBusy = busy === w.key;
-            return (
-              <button
-                key={w.key}
-                type="button"
-                onClick={() => connect(w)}
-                disabled={busy !== null}
-                // Not disabled when absent: the button still has something
-                // useful to say, and a dead control explains nothing.
-                title={announced ? `Connect with ${announced.info.name}` : undefined}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 9,
-                  minWidth: 100,
-                  height: 40,
-                  padding: "0 16px",
-                  border: "1px solid rgba(241,234,217,.16)",
-                  borderRadius: 8,
-                  background: "linear-gradient(145deg,rgba(58,34,26,.92),rgba(34,22,17,.92))",
-                  color: "#F6EEDE",
-                  fontFamily: "var(--sans)",
-                  fontSize: 13.5,
-                  fontWeight: 500,
-                  letterSpacing: "-.2px",
-                  cursor: busy ? "wait" : "pointer",
-                  opacity: busy && !isBusy ? 0.5 : 1,
-                  boxShadow:
-                    "inset 0 1px 0 rgba(255,255,255,.10),0 1px 5px rgba(0,0,0,.4),0 0 18px rgba(166,50,31,.18)",
-                }}
-              >
-                {/* The wallet's own icon when it announced one, so the button
-                    shows the wallet actually being talked to rather than a
-                    logo we drew for it. */}
-                {announced?.info.icon ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={announced.info.icon}
-                    alt=""
-                    width={16}
-                    height={16}
-                    style={{ borderRadius: 4, display: "block" }}
-                  />
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 4,
-                      background: "linear-gradient(145deg,#C4472E,#8C2818)",
-                      boxShadow: "inset 0 1px 0 rgba(255,255,255,.22)",
-                    }}
-                  />
-                )}
-                {isBusy ? "Waiting..." : w.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* What the click actually did, when it did not open a wallet. */}
-        {missing ? (
+        {/* Three states, and only one of them is a list. */}
+        {!scanned && shown.length === 0 ? (
           <p
             style={{
-              margin: "14px auto 0",
-              maxWidth: "34ch",
+              margin: "20px 0 0",
               fontFamily: "var(--sans)",
-              fontSize: 12,
-              lineHeight: 1.6,
-              color: "#F0C3B6",
+              fontSize: 12.5,
+              color: "rgba(241,234,217,.58)",
+              animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 140ms both",
             }}
           >
-            {missing.label} did not answer, so it is probably not installed in this browser.
-            Nothing else was connected in its place - another wallet would sign with a different
-            address.{" "}
-            <a
-              href={missing.site}
-              target="_blank"
-              rel="noreferrer noopener"
-              style={{ color: "#F6D8CE", textDecoration: "underline" }}
-            >
-              Install {missing.label}
-            </a>
-            , then reload.
+            Looking for wallets...
           </p>
-        ) : null}
+        ) : shown.length === 0 ? (
+          <div
+            style={{
+              margin: "20px auto 0",
+              maxWidth: "36ch",
+              animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 140ms both",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                fontFamily: "var(--sans)",
+                fontSize: 13,
+                lineHeight: 1.65,
+                color: "#F0C3B6",
+              }}
+            >
+              <strong style={{ color: "#F6D8CE" }}>No EVM wallet found in this browser.</strong>{" "}
+              Bidding needs one, because a sealed bid is signed by the address it belongs to.
+            </p>
+            <p
+              style={{
+                margin: "12px 0 0",
+                fontFamily: "var(--sans)",
+                fontSize: 12,
+                lineHeight: 1.65,
+                color: "rgba(241,234,217,.62)",
+              }}
+            >
+              Install{" "}
+              <a
+                href="https://metamask.io/download/"
+                target="_blank"
+                rel="noreferrer noopener"
+                style={{ color: "#F6D8CE" }}
+              >
+                MetaMask
+              </a>
+              ,{" "}
+              <a
+                href="https://rabby.io/"
+                target="_blank"
+                rel="noreferrer noopener"
+                style={{ color: "#F6D8CE" }}
+              >
+                Rabby
+              </a>{" "}
+              or any other EVM wallet, then reload. Reading the docket needs no wallet at all.
+            </p>
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                marginTop: 16,
+                height: 36,
+                padding: "0 16px",
+                border: "1px solid rgba(241,234,217,.16)",
+                borderRadius: 7,
+                background: "rgba(22,19,14,.6)",
+                color: "#F1EAD9",
+                fontFamily: "var(--sans)",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Back to the site
+            </button>
+          </div>
+        ) : (
+          <>
+            <p
+              style={{
+                margin: "18px 0 12px",
+                fontFamily: "var(--sans)",
+                fontSize: 12.5,
+                letterSpacing: ".01em",
+                color: "rgba(241,234,217,.56)",
+                animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 140ms both",
+              }}
+            >
+              Continue with
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
+                gap: 10,
+                animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 200ms both",
+              }}
+            >
+              {shown.map((w) => {
+                const isBusy = busy === w.info.uuid;
+                return (
+                  <button
+                    key={w.info.uuid}
+                    type="button"
+                    onClick={() => connect(w)}
+                    disabled={busy !== null}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 9,
+                      minWidth: 100,
+                      height: 40,
+                      padding: "0 16px",
+                      border: "1px solid rgba(241,234,217,.16)",
+                      borderRadius: 8,
+                      background:
+                        "linear-gradient(145deg,rgba(58,34,26,.92),rgba(34,22,17,.92))",
+                      color: "#F6EEDE",
+                      fontFamily: "var(--sans)",
+                      fontSize: 13.5,
+                      fontWeight: 500,
+                      letterSpacing: "-.2px",
+                      cursor: busy ? "wait" : "pointer",
+                      opacity: busy && !isBusy ? 0.5 : 1,
+                      boxShadow:
+                        "inset 0 1px 0 rgba(255,255,255,.10),0 1px 5px rgba(0,0,0,.4),0 0 18px rgba(166,50,31,.18)",
+                    }}
+                  >
+                    {/* The wallet's own icon, as it announced it. EIP-6963
+                        requires a data URI, so this loads no third party and
+                        the button shows the wallet actually being talked to
+                        rather than a logo we drew for it. */}
+                    {w.info.icon ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={w.info.icon}
+                        alt=""
+                        width={18}
+                        height={18}
+                        style={{ borderRadius: 4, display: "block", flexShrink: 0 }}
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: 4,
+                          background: "linear-gradient(145deg,#C4472E,#8C2818)",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,.22)",
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    {isBusy ? "Waiting..." : w.info.name}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         {error ? (
           <p
             role="alert"
             style={{
-              margin: "14px auto 0",
+              margin: "16px auto 0",
               maxWidth: "34ch",
               fontFamily: "var(--sans)",
               fontSize: 12,
@@ -418,144 +462,32 @@ export default function Connect({
           </p>
         ) : null}
 
-        {/* ================= or ================= */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            margin: "22px 0 14px",
-            animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 260ms both",
-          }}
-        >
-          <span style={{ flex: 1, height: 1, background: "rgba(241,234,217,.13)" }} />
-          <span
+        {shown.length > 0 ? (
+          <p
             style={{
+              margin: "20px auto 0",
+              maxWidth: "36ch",
               fontFamily: "var(--sans)",
-              fontSize: 10,
-              letterSpacing: ".18em",
+              fontSize: 11.5,
+              lineHeight: 1.65,
               color: "rgba(241,234,217,.58)",
+              animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 320ms both",
             }}
           >
-            OR
-          </span>
-          <span style={{ flex: 1, height: 1, background: "rgba(241,234,217,.13)" }} />
-        </div>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            openRecord();
-          }}
-          style={{ animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 320ms both" }}
-        >
-          <label htmlFor="cn-addr" className="sr-only">
-            Paste an address to open its public record
-          </label>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              height: 42,
-              padding: "0 12px",
-              border: `1px solid ${address && !addressOk ? "rgba(232,120,94,.5)" : "rgba(241,234,217,.14)"}`,
-              borderRadius: 8,
-              background: "rgba(22,19,14,.58)",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-            }}
-          >
-            <svg
-              aria-hidden="true"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="rgba(241,234,217,.55)"
-              strokeWidth="1.7"
-              style={{ flexShrink: 0 }}
-            >
-              <rect x="2.5" y="6" width="19" height="13" rx="2.5" />
-              <path d="M2.5 10h19" />
-            </svg>
-            <input
-              id="cn-addr"
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              placeholder="Paste an address"
-              spellCheck={false}
-              autoComplete="off"
-              style={{
-                flex: 1,
-                minWidth: 0,
-                border: 0,
-                outline: "none",
-                background: "transparent",
-                color: "#F1EAD9",
-                fontFamily: "var(--mono)",
-                fontSize: 13,
-                letterSpacing: "-.1px",
-              }}
-            />
-            {addressOk ? (
-              <button
-                type="submit"
-                style={{
-                  flexShrink: 0,
-                  height: 28,
-                  padding: "0 11px",
-                  border: "1px solid rgba(241,234,217,.16)",
-                  borderRadius: 6,
-                  background: "linear-gradient(145deg,#B93A24,#8C2818)",
-                  color: "#F6EEDE",
-                  fontFamily: "var(--sans)",
-                  fontSize: 12,
-                  cursor: "pointer",
-                }}
-              >
-                Open
-              </button>
-            ) : null}
-          </div>
-          {address && !addressOk ? (
-            <p
-              style={{
-                margin: "8px 0 0",
-                fontFamily: "var(--sans)",
-                fontSize: 11.5,
-                color: "#F0C3B6",
-              }}
-            >
-              That is not an address. It should be 0x followed by 40 hexadecimal characters.
-            </p>
-          ) : null}
-        </form>
+            Connecting only proves the address. Sealing a bid is a separate signature you approve
+            per round.
+          </p>
+        ) : null}
 
         <p
           style={{
-            margin: "16px auto 0",
-            maxWidth: "36ch",
-            fontFamily: "var(--sans)",
-            fontSize: 11.5,
-            lineHeight: 1.65,
-            color: "rgba(241,234,217,.58)",
-            animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 380ms both",
-          }}
-        >
-          Connecting only proves the address. Sealing a bid is a separate signature you approve
-          per round. A pasted address only opens its public record.
-        </p>
-
-        <p
-          style={{
-            margin: "10px 0 0",
+            margin: "12px 0 0",
             fontFamily: "var(--mono)",
             fontSize: 10.5,
             letterSpacing: ".1em",
             textTransform: "uppercase",
             color: "rgba(241,234,217,.62)",
-            animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 420ms both",
+            animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 380ms both",
           }}
         >
           {network}

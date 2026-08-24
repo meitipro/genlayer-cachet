@@ -217,7 +217,11 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
       const parsed = JSON.parse(String(raw));
       if (!parsed.found) {
         setFailed(true);
-        setMessage("The verdict was accepted but could not be read back. Try again in a moment.");
+        setMessage(
+          "The network did not reach agreement on these criteria, so no verdict was stored. " +
+            "That is the validators disagreeing rather than anything wrong with your wording - " +
+            "run the check again and a different set of models will judge it.",
+        );
         return;
       }
       setVerdict({

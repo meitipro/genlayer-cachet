@@ -13,9 +13,9 @@ network scores every revealed bid against those exact criteria.
 [![Next.js 14](https://img.shields.io/badge/Next.js-14-101216?style=flat-square)](https://nextjs.org)
 [![MIT](https://img.shields.io/badge/license-MIT-101216?style=flat-square)](LICENSE)
 
-[The docket](/rounds) &nbsp;-&nbsp;
-[Publish a tender](/publish) &nbsp;-&nbsp;
-[How it works](/docs)
+[The docket](app/(site)/rounds/page.tsx) &nbsp;-&nbsp;
+[Publish a tender](app/(site)/publish/page.tsx) &nbsp;-&nbsp;
+[How it works](app/(site)/docs/page.tsx)
 
 </div>
 

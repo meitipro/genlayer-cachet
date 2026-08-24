@@ -63,6 +63,7 @@ import {
   readWithRetry,
   refusalOf,
   sendWithRetry,
+  sleep,
   statusOf,
   toWei,
   waitAccepted,
@@ -93,13 +94,65 @@ function record(label, ok, detail = "") {
 let state;
 
 /** Run a named step once per contract, ever. */
+/**
+ * Run a step once, and record it as done only if it actually worked.
+ *
+ * `fn` may return false to mean "this did not complete". That distinction was
+ * missing and it cost a whole run: the scorability gate is a consensus call,
+ * its transaction can finalize while the nondeterministic block never agrees,
+ * and `write` returning without throwing was taken as success. The step went
+ * into `done`, nothing was stored on chain, and every resumed run then SKIPPED
+ * the step and died reading a record that was never written. A resumable
+ * script that records failures as progress is worse than one that cannot
+ * resume at all.
+ */
 async function step(name, fn) {
   if (state.isDone(name)) {
     console.log(`  ..    ${name}  (already done)`);
     return;
   }
-  await fn();
+  const result = await fn();
+  if (result === false) return;
   state.markDone(name);
+}
+
+/**
+ * Run the scorability gate until the network actually returns a verdict.
+ *
+ * A consensus call has three outcomes, not two: agreed-and-scorable,
+ * agreed-and-refused, and NO AGREEMENT. Only the third is retried here, and it
+ * is retried because nothing was written - the network did not judge, so there
+ * is no judgement to re-roll.
+ *
+ * This is not "ask again until it says yes", and the contract makes sure it
+ * cannot become that: once a verdict is stored, `check_criteria` refuses a
+ * repeat outright with ERR_ALREADY_CHECKED, in EITHER direction. So a refusal
+ * ends the loop on the first pass, exactly like a pass does. The only thing
+ * this survives is the network failing to answer.
+ */
+async function gateUntilJudged(client, criteria, label, attempts = 4) {
+  const digest = criteriaDigest(criteria);
+  for (let i = 1; i <= attempts; i++) {
+    const existing = await read(client, "check", [digest]);
+    if (existing.found === true) return existing;
+
+    const out = await write(client, "check_criteria", [criteria], 0n, label);
+    if (ok(out)) {
+      const stored = await read(client, "check", [digest]);
+      if (stored.found === true) return stored;
+    }
+
+    // Either the call errored or it succeeded without leaving a record, and
+    // both mean the same thing: the validators did not agree on the booleans.
+    // The leader rotates between attempts, so a different model set tries next.
+    if (i < attempts) {
+      console.log(
+        `        no consensus on attempt ${i}/${attempts}${out.refusal ? ` (${out.refusal})` : ""} - the validators did not agree, retrying`,
+      );
+      await sleep(6000);
+    }
+  }
+  return { found: false };
 }
 
 async function read(client, functionName, args = []) {
@@ -264,12 +317,12 @@ async function main() {
 
   console.log("\n  --- the flagship round ---\n");
 
-  await step("infra:check", async () => {
-    console.log("  checking the infrastructure criteria");
-    await write(buyerClient, "check_criteria", [INFRA_CRITERIA], 0n, "check (infra)");
-  });
-
-  const infraCheck = await read(buyerClient, "check", [criteriaDigest(INFRA_CRITERIA)]);
+  console.log("  checking the infrastructure criteria");
+  const infraCheck = await gateUntilJudged(
+    buyerClient,
+    INFRA_CRITERIA,
+    "check (infra)",
+  );
   record(
     "criteria that can be scored from text pass the gate",
     infraCheck.found === true && infraCheck.scorable === true,

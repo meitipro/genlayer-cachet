@@ -65,7 +65,16 @@ async function main() {
 
   const { account, client } = makeClient(key, chain);
   const treasury = flag("treasury", account.address);
-  const code = readFileSync(CONTRACT, "utf8");
+  /**
+   * Line endings normalised before the source goes on chain.
+   *
+   * Git stores this file with LF (see .gitattributes) but checks it out with
+   * CRLF on Windows, and the deploy sends whatever is on disk. That is 2.4 KB
+   * of carriage returns paid for in on-chain bytes, on a payload whose size is
+   * already the thing most likely to make the deploy fail - and it means the
+   * deployed source would not be byte-identical to the repo it came from.
+   */
+  const code = readFileSync(CONTRACT, "utf8").split(String.fromCharCode(13, 10)).join(String.fromCharCode(10));
   const depositWei = toWei(depositGen);
   const bondWei = toWei(bondGen);
 
@@ -92,7 +101,8 @@ async function main() {
 
   console.log("");
   console.log("  contract       contracts/cachet.py");
-  console.log(`  bytes          ${code.length.toLocaleString("en-US")}`);
+  const codeBytes = Buffer.byteLength(code, "utf8");
+  console.log(`  bytes          ${codeBytes.toLocaleString("en-US")}`);
   console.log(`  network        ${chain.name} (chain ${chain.id})`);
   console.log(`  rpc            ${chain.rpcUrls.default.http[0]}`);
   console.log(`  deployer       ${account.address}`);
@@ -107,6 +117,19 @@ async function main() {
   console.log("  All three are copied onto every round at publication, so changing");
   console.log("  them later cannot reach a tender whose bidders already read the terms.");
   console.log("");
+
+  // Size is the likeliest reason a Studio deploy fails, and it never reports
+  // itself as one: the RPC resets the request body, genlayer-js shrugs off the
+  // gas estimate and then dies on eth_sendRawTransaction. Measured on Studio,
+  // deploys are reliable below ~55 KB and get progressively worse above it. Say
+  // so BEFORE the attempt, so a failure is a known cause rather than a mystery.
+  if (codeBytes > 55_000) {
+    console.log(`  NOTE  this payload is ${(codeBytes / 1024).toFixed(1)} KB, above the ~55 KB where Studio`);
+    console.log("        deploys start needing retries. Eight are made automatically with a");
+    console.log("        growing backoff. If they all fail, deploy a tiny contract to tell a");
+    console.log("        size problem from an outage - that takes a minute and settles it.");
+    console.log("");
+  }
 
   if (!has("yes")) {
     const rl = createInterface({ input: stdin, output: stdout });

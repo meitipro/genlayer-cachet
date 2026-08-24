@@ -26,8 +26,14 @@ import { type Announced, remember, wallets } from "@/components/providers";
  *
  * There is no way in without a wallet. Typing an address is not evidence of
  * holding its key, and this screen does not pretend otherwise - the paste box
- * that used to sit here is gone. Public records stay public and reachable from
- * the docket, which needs no wallet and claims nothing about who is reading.
+ * that used to sit here is gone.
+ *
+ * What that gates is the APP, not the record. Every route stays readable at
+ * its own url, so a link to a round, a scorecard or a bidder's history opens
+ * for anyone, with or without a wallet, and that has to stay true: a product
+ * whose claim is that a losing bidder can check the scoring cannot put the
+ * scoring behind a wallet. The header asks who you are because the header is
+ * the way in to doing something. Reading is not doing something.
  */
 
 export default function Connect({

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import Intro from "./Intro";
 import Landing from "./Landing";
@@ -37,6 +37,24 @@ const Connect = dynamic(() => import("./Connect"), {
 });
 
 /**
+ * Where `?to=` is allowed to send somebody.
+ *
+ * The value arrives in a URL, so anyone can write it, and pushing it
+ * unchecked is an open redirect: `/?connect=1&to=https://evil.example` would
+ * bounce a reader off this site the moment they connected a wallet - from a
+ * link that looks like ours and a screen that just asked them to trust us.
+ *
+ * Only a same-origin absolute path is accepted. `//host` is rejected too: the
+ * browser reads a protocol-relative URL as another origin even though it
+ * starts with a slash.
+ */
+function safeReturnPath(raw: string | null): string {
+  if (!raw) return "/rounds";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/rounds";
+  return raw;
+}
+
+/**
  * The landing experience: intro, header, hero, demo card.
  *
  * This is the one route that takes over the viewport, so it is also the one
@@ -62,6 +80,7 @@ export default function Cinematic({
   openRounds: number | null;
 }) {
   const router = useRouter();
+  const params = useSearchParams();
   const [menu, setMenu] = useState(false);
   /**
    * Which of the two full-screen views is showing.
@@ -109,6 +128,19 @@ export default function Cinematic({
   useEffect(() => {
     router.prefetch("/rounds");
   }, [router]);
+
+  /**
+   * `/?connect=1&to=/publish` opens the wallet step and returns them there.
+   *
+   * The inner pages have no wallet picker of their own - there is one screen
+   * that asks, and it lives here - so when one of them needs a choice made it
+   * sends the reader over with the page they were on attached.
+   */
+  useEffect(() => {
+    if (params.get("connect") !== "1") return;
+    setPending(safeReturnPath(params.get("to")));
+    setView("connect");
+  }, [params]);
 
   // Escape backs out of the connect step. It is a dialog in everything but
   // markup, and it should close the way one does.

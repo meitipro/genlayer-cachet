@@ -201,7 +201,7 @@ export async function waitFinal(client, hash, label) {
  * the only lever from outside. A real contract error looks nothing like this
  * and is left to propagate.
  */
-export async function deployWithRetry(client, code, args, attempts = 4) {
+export async function deployWithRetry(client, code, args, attempts = 8) {
   for (let i = 1; i <= attempts; i++) {
     try {
       return await client.deployContract({ code, args });
@@ -209,10 +209,14 @@ export async function deployWithRetry(client, code, args, attempts = 4) {
       const msg = errorText(e);
       const starved = /intrinsic gas too low/i.test(msg);
       if ((starved || isFlaky(msg) || isRateLimited(msg)) && i < attempts) {
+        // Backoff grows to clear Studio's per-minute window rather than
+        // spending the whole budget inside it. Eight attempts at 4s, 8s, 12s
+        // and up is roughly two and a half minutes of trying.
+        const waitMs = 4000 * i;
         console.log(
-          `  attempt ${i} hit a transient rpc hiccup (${starved ? "gas estimation fell back too low" : "connection dropped"}), nothing was spent - retrying`,
+          `  attempt ${i}/${attempts} hit a transient rpc fault (${starved ? "gas estimation fell back too low" : "connection dropped"}), nothing was spent - retrying in ${Math.round(waitMs / 1000)}s`,
         );
-        await sleep(2500 * i);
+        await sleep(waitMs);
         continue;
       }
       throw e;

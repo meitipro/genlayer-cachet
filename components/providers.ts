@@ -51,9 +51,23 @@ export const LEGACY_RDNS = "legacy.window.ethereum";
  * in practice, but a slow extension can be a frame or two behind, and reporting
  * "no wallet" to somebody who has one is the worse mistake.
  */
+let cached: Promise<Announced[]> | null = null;
+
 export function discover(waitMs = 300): Promise<Announced[]> {
   if (typeof window === "undefined") return Promise.resolve([]);
-  return new Promise((resolve) => {
+  // One scan per page, shared by every caller.
+  //
+  // Each scan costs the full wait below, and the callers are not rare:
+  // `chosenProvider` runs on every guarded header click, on every mount of
+  // `useWallet`, again when it attaches its listeners, and once more for each
+  // `walletClient`. Unshared, a single page load spent well over a second
+  // waiting for announcements that had all arrived in the first frame.
+  //
+  // Safe to hold because extensions announce when they load and the set does
+  // not change afterwards - installing one requires a reload, which clears
+  // this along with everything else on the page.
+  if (cached) return cached;
+  cached = new Promise((resolve) => {
     const found: Announced[] = [];
     const onAnnounce = (event: Event) => {
       const detail = (event as CustomEvent<Announced>).detail;
@@ -64,9 +78,13 @@ export function discover(waitMs = 300): Promise<Announced[]> {
     window.dispatchEvent(new Event("eip6963:requestProvider"));
     setTimeout(() => {
       window.removeEventListener("eip6963:announceProvider", onAnnounce);
+      // Nothing answered: do not cache that. A wallet that was still starting
+      // up would otherwise be written off for the life of the page.
+      if (found.length === 0) cached = null;
       resolve(found);
     }, waitMs);
   });
+  return cached;
 }
 
 /** The announced wallets, plus a legacy entry ONLY when nothing announced. */

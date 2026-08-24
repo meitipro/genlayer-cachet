@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "genlayer-js";
 
 import { ADD_CHAIN_PARAMS, CACHET, CHAIN, CHAIN_ID_HEX, IS_LIVE, NETWORK_LABEL } from "@/lib/chain";
@@ -37,6 +38,8 @@ export type TxState = {
  * wallet produces a commitment mismatch the contract is right to refuse.
  */
 export function useWallet() {
+  const router = useRouter();
+  const pathname = usePathname();
   const [address, setAddress] = useState<string | null>(null);
   const [chainOk, setChainOk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -99,7 +102,14 @@ export function useWallet() {
         return;
       }
       if (found.length > 1) {
-        setError("Several wallets are installed. Choose one from the connect screen.");
+        // Send them to the one screen that can ask, and bring them back.
+        //
+        // This used to set an error reading "choose one from the connect
+        // screen", which was a dead end: the connect step lives on the landing
+        // and there is no way to reach it from here. Anyone arriving straight
+        // at this page - a shared link, a bookmark, cleared site data - with
+        // two wallets installed had a button that could only ever fail.
+        router.push(`/?connect=1&to=${encodeURIComponent(pathname || "/rounds")}`);
         return;
       }
       remember(found[0].info.rdns);
@@ -129,7 +139,7 @@ export function useWallet() {
     } finally {
       setBusy(false);
     }
-  }, [refresh]);
+  }, [refresh, router, pathname]);
 
   return { address, chainOk, busy, error, connect, refresh, network: NETWORK_LABEL };
 }

@@ -66,6 +66,7 @@ ERR_NOTHING_TO_CLAIM = f"{ERROR_EXPECTED} nothing is owed on this bid"
 ERR_ROUND_LIVE = f"{ERROR_EXPECTED} this round has not settled yet"
 ERR_NOT_YOUR_BID = f"{ERROR_EXPECTED} only the bidder who sealed this bid may do that"
 ERR_ASK_CLOSED = f"{ERROR_EXPECTED} questions close with the commit window"
+ERR_ANSWER_CLOSED = f"{ERROR_EXPECTED} answers close with the commit window"
 ERR_ASK_FULL = f"{ERROR_EXPECTED} this round has taken its maximum number of questions"
 ERR_ASK_LIMIT = f"{ERROR_EXPECTED} this address has asked its maximum number of questions here"
 ERR_NO_QUESTION = "no question with that index"
@@ -647,23 +648,33 @@ def fence(text: str) -> str:
     everything after it reads as though it were outside the submission -
     which is precisely the position the criteria do NOT cover.
 
-    So the delimiters are stripped from the text before it is wrapped.
-    Replacing the angle brackets keeps the words visible to the scorer (a
-    proposal that genuinely discusses XML is still readable) while making it
-    impossible to reproduce the fence itself.
+    So the delimiters are neutralised before the text is wrapped. Replacing the
+    angle brackets keeps the words visible to the scorer (a proposal that
+    genuinely discusses XML is still readable) while making it impossible to
+    reproduce the fence itself.
+
+    EVERY angle bracket, not a list of known tag spellings. This function used
+    to replace six exact strings - `<proposal>`, `</proposal>` and so on - which
+    is a denylist, and a denylist of six entries against an attacker who can
+    write any bytes at all. All of these walked straight through it:
+
+        </PROPOSAL>        different case
+        </proposal >       one trailing space
+        < /proposal>       one leading space
+        </proposal	>      a tab
+
+    A model reading the prompt treats each of those as the closing tag, because
+    a model is not doing a string comparison. So the check cannot be one either.
+    Replacing the brackets themselves has no spellings to miss.
+
+    Replace rather than delete: length is preserved, so fencing after a length
+    cap cannot push a payload back over it, and the attempt stays legible as the
+    text somebody actually submitted.
 
     Pure, and applied before the non-deterministic block, so the leader and
     every validator score byte-identical input.
     """
-    return (
-        str(text)
-        .replace("<proposal>", "(proposal)")
-        .replace("</proposal>", "(/proposal)")
-        .replace("<appeal>", "(appeal)")
-        .replace("</appeal>", "(/appeal)")
-        .replace("<criteria>", "(criteria)")
-        .replace("</criteria>", "(/criteria)")
-    )
+    return str(text).replace("<", "(").replace(">", ")")
 
 
 def score_input(proposal: str) -> str:
@@ -1459,11 +1470,19 @@ class Contract(gl.Contract):
 
         q = r.questions.append_new_get()
         q.asker = sender
-        # Fenced for the same reason a proposal is. A question is untrusted
-        # text that ends up beside the criteria on every bidder's screen, and
-        # the delimiters are neutralised here rather than at the point of
-        # display, so no future reader of this field has to remember.
-        q.text = fence(text)[:QUESTION_MAX]
+        # Stored exactly as written, and deliberately NOT fenced.
+        #
+        # Fencing belongs at the boundary where text is put in front of a model,
+        # and a question never is: it is stored, listed and read by people. This
+        # field used to be fenced on the way in, which meant a buyer asking
+        # about "<address> fields" saw their own question come back reworded,
+        # with no way to tell whether they had typed it that way. A record's job
+        # is to hold what somebody actually wrote.
+        #
+        # Safe on screen for a different reason: React escapes text nodes, so
+        # markup in a question renders as the characters it is. If a question
+        # ever DOES reach a prompt, fence it there.
+        q.text = text[:QUESTION_MAX]
         q.answer = ""
         q.asked_at = canon_instant(gl.message_raw["datetime"])
         q.answered_at = ""
@@ -1477,6 +1496,20 @@ class Contract(gl.Contract):
         bidders had started writing against it would be moving the goalposts
         with no record that they had moved - and the record is the product.
 
+        Closes with the COMMIT WINDOW, on the same deadline and for the same
+        reason as `ask`. That reason is written out in full on `ask` above: an
+        answer arriving after commitments are sealed is information the bidders
+        who already committed cannot use, so it rewards whoever waited. The
+        deadline was argued there and enforced only there - `answer` checked
+        that the round was still open, which stays true right up to settlement,
+        leaving a window of hours in which the buyer could publish a
+        clarification that no sealed bidder could act on, timestamped as though
+        they could. The check belongs on both sides of the exchange.
+
+        A question asked near the deadline may therefore go unanswered. That is
+        the honest outcome, and the round page counts unanswered questions
+        rather than hiding them.
+
         An answer explains what a criterion MEANS. It does not change what is
         scored: the model is given the frozen criteria and nothing else, so a
         clarification helps a bidder write to the standard rather than altering
@@ -1489,6 +1522,8 @@ class Contract(gl.Contract):
             gl.advanced.user_error_immediate(ERR_ROUND_SETTLED)
         if gl.message.sender_address != r.buyer:
             gl.advanced.user_error_immediate(ERR_NOT_BUYER)
+        if self._now() > parse_instant(str(r.commit_closes)):
+            gl.advanced.user_error_immediate(ERR_ANSWER_CLOSED)
 
         idx = int(question_index)
         if idx < 0 or idx >= len(r.questions):
@@ -1501,7 +1536,7 @@ class Contract(gl.Contract):
         if not text:
             gl.advanced.user_error_immediate(ERR_ANSWER_EMPTY)
 
-        q.answer = fence(text)[:ANSWER_MAX]
+        q.answer = text[:ANSWER_MAX]
         q.answered_at = canon_instant(gl.message_raw["datetime"])
 
     @gl.public.write
@@ -2060,14 +2095,25 @@ class Contract(gl.Contract):
 
         Paged rather than complete: a view that returned every round would grow
         without bound and start failing on exactly the day the product worked.
+
+        Both arguments are clamped, because `u256` here is a `NewType` over
+        `int` and enforces nothing at the boundary: a negative offset arrives as
+        a negative int. It used to arrive and be used, and since the index walks
+        BACKWARDS from the end (`total - 1 - start - n`), a negative start walks
+        forwards off it instead - `rounds_page(-1, 12)` on a three-round
+        contract read `self.rounds[3]` and took the view down with an
+        IndexError. The docket takes its offset from a query string, so that was
+        a crash any reader could type into the address bar.
         """
-        start = int(offset)
+        start = max(0, int(offset))
         count = max(0, min(int(limit), 24))
         total = len(self.rounds)
         out = []
         for n in range(count):
             idx = total - 1 - start - n
-            if idx < 0:
+            # Both ends. `idx < 0` alone is the walk running off the old end;
+            # the upper bound is what a bad offset needs.
+            if idx < 0 or idx >= total:
                 break
             out.append(self._round_shape(idx, self.rounds[idx]))
         return json.dumps({"total": total, "rounds": out}, separators=(",", ":"))
@@ -2235,9 +2281,22 @@ class Contract(gl.Contract):
                 for i in range(len(r.bids)):
                     b = r.bids[i]
                     if b.bidder.as_hex.lower() == key:
-                        # Latest row wins: a bidder who withdrew and came back
-                        # has two rows here, and the live one is the later.
-                        if mine is None or str(b.status) != ST_WITHDRAWN:
+                        # One address can hold several rows in a round: withdraw
+                        # leaves the old row behind and a re-commit appends a
+                        # new one. Two rules, in order - a live row always beats
+                        # a withdrawn one, and among rows of equal standing the
+                        # later wins.
+                        #
+                        # The condition here used to be `mine is None or status
+                        # != ST_WITHDRAWN`, which gets the first rule right and
+                        # drops the second: a bidder who committed and withdrew
+                        # TWICE left two withdrawn rows, the second was refused
+                        # for being withdrawn, and the view reported row 0 -
+                        # linking to the older cancellation and dating the
+                        # bidder's involvement to the wrong one.
+                        incoming_live = str(b.status) != ST_WITHDRAWN
+                        held_live = mine is not None and mine["status"] != ST_WITHDRAWN
+                        if mine is None or incoming_live or not held_live:
                             mine = {
                                 "i": i,
                                 "status": str(b.status),

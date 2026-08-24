@@ -202,6 +202,65 @@ raises inside GenVM with a code that loses its message, so a caller gets a VM
 error nobody can read instead of a refusal they can act on. `is_address` checks
 every caller-supplied address before one is constructed.
 
+## Found on a third pass, before deploying again
+
+Four more. Two of them are the same mistake as before, made again in a place the
+second pass did not look, which is the part worth reading.
+
+**8. The fence was a denylist.** Item 2 above says `fence()` "neutralises the
+delimiters", and it did - six of them, by exact string: `<proposal>`,
+`</proposal>`, `<appeal>` and so on. That is a denylist of six entries against
+somebody who can write any bytes they like, and every one of these walked
+through it into the prompt as a working closing tag:
+
+    </PROPOSAL>        </proposal >        < /proposal>        </ proposal>
+
+A model reading the prompt is not running a string comparison, so the defence
+could not be one either. `fence()` now replaces **every** angle bracket, which
+has no spellings left to miss. Replace rather than delete, so length is
+preserved and a payload cannot be pushed back over a cap that was just applied
+to it, and so the attempt stays readable as the text somebody submitted.
+
+The lesson is narrower than "use a blocklist properly": item 2 was written,
+tested and shipped, and the test asserted the six strings it knew about. A
+security test that enumerates the attacks you thought of measures your
+imagination, not the boundary.
+
+**9. Fencing had leaked into storage.** `ask` and `answer` fenced their text on
+the way *in*, so a buyer asking about `<address>` fields got their own question
+back reworded, with no way to tell whether that was the contract or their own
+typing. Neither string ever reaches a model - questions are stored, listed and
+read by people. Fencing belongs at the boundary where text is handed to a model
+and nowhere else; a record's job is to hold what somebody actually wrote. Both
+now store verbatim.
+
+**10. Answers had no deadline.** `ask` closes with the commit window and its
+docstring explains exactly why: an answer arriving after commitments are sealed
+is information the bidders who already committed cannot use, so it rewards
+whoever waited. `answer` checked only that the round was still open - which
+stays true right up to settlement. So the rule was argued in one place and
+enforced in one place, and they were not the same place. A buyer had hours after
+the seals were taken in which to publish a clarification no sealed bidder could
+act on, timestamped as though they could. Both sides now close together, and a
+question asked near the deadline may simply go unanswered, which the round page
+already counts.
+
+**11. A negative page offset crashed a view.** `u256` is a `NewType` over `int`
+and enforces nothing at the boundary, so a negative offset arrives as a negative
+int. `rounds_page` indexes *backwards* from the newest round, so a negative
+offset walks forwards off the end instead: `rounds_page(-1, 12)` on a two-round
+contract read `self.rounds[2]` and took the view down. The docket reads its
+offset from a query string, so that was a crash any reader could type into the
+address bar. Both the offset and the limit are clamped, and the loop now checks
+both ends of the range rather than one.
+
+Plus one that is a wrong answer rather than a failure: `bidder` picked the wrong
+row for an address holding several. Withdrawing leaves the old row in place and
+a re-commit appends a new one, and the rule is meant to be "a live row beats a
+withdrawn one, and among equals the later wins". The code implemented the first
+half only, so a bidder who committed and withdrew twice was reported at row 0 -
+linking to the older cancellation and dating their involvement to the wrong one.
+
 ## Design corrections that are not bug fixes
 
 **Award is permissionless after the decision window.** The brief never says who
@@ -219,9 +278,29 @@ status derived from the clock, so `sweep` exists to make the record match
 reality without waiting for settlement. A bid everyone can see is dead should
 not read as `sealed` on every page until the round settles.
 
-**Every published read is O(1) or paged.** `rounds_page` takes an offset and a
-limit; a view that returned every round would grow without bound and start
-failing on exactly the day the product worked.
+**Every published read is O(1), paged, or bounded by a published cap.** The
+only unbounded collection is the list of rounds, and `rounds_page` takes an
+offset and a limit for exactly that reason: a view that returned every round
+would grow without bound and start failing on the day the product worked.
+
+The rest are bounded by constants the contract enforces on the way in, so the
+worst case is a number rather than a growth curve:
+
+| view | worst case | held down by |
+|---|---|---|
+| `terms`, `stats` | O(1) | counters, not scans |
+| `rounds_page` | 24 rounds | `limit` clamped to 24 |
+| `round` | 8 criteria | `CRITERIA_MAX` |
+| `bids` | 64 bids, proposals cut to 400 characters | `BIDS_MAX_CAP` |
+| `bid` | one bid, proposal in full to 6,000 characters | `PROPOSAL_MAX` |
+| `questions` | 32 questions | `QUESTIONS_MAX` |
+| `bidder` | 24 rounds scanned, 64 bids each | page of 24, `BIDS_MAX_CAP` |
+
+`bidder` is the widest of them and it is the one to watch: it walks each
+round's bids looking for the caller's rows, so it is bounded rather than cheap.
+This table said "O(1) or paged" before, which was neither true of `bids` nor of
+`bidder` - both are linear in a capped collection. The cap is what makes them
+safe, so the cap is what the table names.
 
 **A contract cannot see how many validators agreed.** The site says a result
 was "agreed", never "five of five" - that number is not available to the code

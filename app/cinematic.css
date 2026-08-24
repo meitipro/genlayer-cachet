@@ -59,6 +59,14 @@
   @keyframes en-copy{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
   @keyframes en-card{from{opacity:0;transform:translateY(12px) scale(.968)}to{opacity:1;transform:none}}
   @keyframes en-app{from{opacity:0;transform:translateY(14px) scale(.99)}to{opacity:1;transform:none}}
+  /* The connect step. Same easing family as the entrance above, one beat
+     quieter: this screen asks for a decision rather than making an entrance. */
+  @keyframes cn-fade{from{opacity:0}to{opacity:1}}
+  @keyframes cn-rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  /* Connect screen, narrow phones: the centred brand pill and the right-hand
+     "Back to site" pill collide below about 420px. The wordmark goes and the
+     mark stays. */
+  @media (max-width:420px){ .cn-word{display:none} }
   /*
    * Reduced motion suppresses the ANIMATION, not the layout.
    *

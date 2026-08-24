@@ -202,7 +202,7 @@ export default function SealPanel({
       setMessage("");
       setHash("");
       try {
-        const client = walletClient(address);
+        const client = await walletClient(address);
         if (kind !== "commit" && !mine) {
           setState("failed");
           setMessage("This address has no sealed bid on this round.");

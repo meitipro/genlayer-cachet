@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 
 import Intro from "./Intro";
 import Landing from "./Landing";
+import { connectedAddress } from "@/components/providers";
 
 /**
  * Loaded on demand, and measurably worth it.
@@ -71,6 +72,32 @@ export default function Cinematic({
    * back button after they had already connected.
    */
   const [view, setView] = useState<"landing" | "connect">("landing");
+  /**
+   * Where the reader was heading when the wallet step interrupted them.
+   *
+   * Sending everyone to the docket after connecting would lose the intent of
+   * the click: somebody who pressed "Publish" wants the publish screen, and
+   * making them find it again is the sort of small tax that reads as the app
+   * not having been paying attention.
+   */
+  const [pending, setPending] = useState("/rounds");
+
+  /**
+   * Every header destination goes through the wallet step first.
+   *
+   * `eth_accounts` rather than `eth_requestAccounts`, so this asks whether a
+   * wallet is already authorised and never opens a prompt of its own - the
+   * prompt belongs to the button the reader presses on the connect screen.
+   */
+  const go = useCallback(
+    async (href: string) => {
+      setPending(href);
+      const address = await connectedAddress();
+      if (address) router.push(href);
+      else setView("connect");
+    },
+    [router],
+  );
 
   useEffect(() => {
     document.documentElement.classList.add("cine");
@@ -118,12 +145,17 @@ export default function Cinematic({
             setMenu={setMenu}
             onLaunch={() => {
               setMenu(false);
-              setView("connect");
+              go("/rounds");
             }}
+            onNavigate={go}
           />
         </>
       ) : (
-        <Connect network={network} onBack={() => setView("landing")} />
+        <Connect
+          network={network}
+          destination={pending}
+          onBack={() => setView("landing")}
+        />
       )}
     </main>
   );

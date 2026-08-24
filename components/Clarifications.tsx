@@ -59,7 +59,7 @@ export default function Clarifications({
       setNote("");
       setFailed(false);
       try {
-        const client = walletClient(address);
+        const client = await walletClient(address);
         const hash = (await client.writeContract({
           address: CONTRACT,
           functionName: fn,

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Mark } from "./Mark";
 import { ADD_CHAIN_PARAMS, CHAIN_ID_HEX } from "@/lib/chain";
 import { readableError } from "@/components/wallet";
+import { type Announced, remember, wallets } from "@/components/providers";
 
 /**
  * The wallet step between the landing and the dApp.
@@ -29,85 +30,41 @@ import { readableError } from "@/components/wallet";
  * the docket, which needs no wallet and claims nothing about who is reading.
  */
 
-/** What an EIP-6963 wallet announces about itself. */
-type ProviderInfo = { uuid: string; name: string; rdns: string; icon: string };
-type Eip1193 = {
-  request: (a: { method: string; params?: unknown[] }) => Promise<unknown>;
-};
-type Announced = { info: ProviderInfo; provider: Eip1193 };
-
-/**
- * Wallets that inject but never announce.
- *
- * EIP-6963 is the standard and every current wallet implements it, but an old
- * install can still be sitting on `window.ethereum` alone. Rather than drop
- * that reader at a dead end, it is offered as one clearly generic entry - and
- * only when nothing announced, so it can never sit next to named wallets
- * pretending to be a different one.
- */
-const LEGACY_UUID = "legacy-window-ethereum";
-
-export default function Connect({ network, onBack }: { network: string; onBack: () => void }) {
+export default function Connect({
+  network,
+  destination,
+  onBack,
+}: {
+  network: string;
+  /** Where the reader was heading when this step interrupted them. */
+  destination: string;
+  onBack: () => void;
+}) {
   const router = useRouter();
-  const [wallets, setWallets] = useState<Announced[]>([]);
-  /** Null until discovery has had a chance to answer, so "none" is not claimed early. */
+  const [shown, setShown] = useState<Announced[]>([]);
+  /** False until discovery has had a chance to answer, so "none" is not claimed early. */
   const [scanned, setScanned] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   /**
-   * EIP-6963 discovery.
+   * The wallets installed in this browser.
    *
-   * Listen first, then ask: wallets that already announced on page load
-   * re-announce on `eip6963:requestProvider`, and doing it the other way round
-   * misses every wallet that was ready before this component mounted, which is
-   * most of them.
+   * Discovery lives in `components/providers.ts` because the rest of the app
+   * needs the same answer: the choice made here decides which provider signs
+   * every later transaction, so both sides have to resolve wallets identically.
    */
   useEffect(() => {
-    const onAnnounce = (event: Event) => {
-      const detail = (event as CustomEvent<Announced>).detail;
-      if (!detail?.info?.uuid || !detail.provider) return;
-      setWallets((prev) =>
-        prev.some((p) => p.info.uuid === detail.info.uuid) ? prev : [...prev, detail],
-      );
-    };
-    window.addEventListener("eip6963:announceProvider", onAnnounce);
-    window.dispatchEvent(new Event("eip6963:requestProvider"));
-
-    // Announcements are synchronous in practice, but a slow extension can be a
-    // frame or two behind. A short grace period keeps "no wallet found" from
-    // flashing up in front of somebody who has one.
-    const t = setTimeout(() => setScanned(true), 350);
+    let cancelled = false;
+    wallets().then((found) => {
+      if (cancelled) return;
+      setShown(found);
+      setScanned(true);
+    });
     return () => {
-      window.removeEventListener("eip6963:announceProvider", onAnnounce);
-      clearTimeout(t);
+      cancelled = true;
     };
   }, []);
-
-  /** The announced list, plus a legacy entry only when nothing announced. */
-  const [legacy, setLegacy] = useState<Announced | null>(null);
-  useEffect(() => {
-    if (!scanned || wallets.length > 0) {
-      setLegacy(null);
-      return;
-    }
-    const eth = (window as { ethereum?: Eip1193 }).ethereum;
-    if (!eth) return;
-    setLegacy({
-      info: {
-        uuid: LEGACY_UUID,
-        // Deliberately not guessed at. `isMetaMask` is set by wallets that are
-        // not MetaMask, so a name read off it would be a label we cannot stand
-        // behind on the one screen where the label has to be true.
-        name: "Browser wallet",
-        rdns: LEGACY_UUID,
-        icon: "",
-      },
-      provider: eth,
-    });
-  }, [scanned, wallets.length]);
-
-  const shown = wallets.length > 0 ? wallets : legacy ? [legacy] : [];
 
   const connect = useCallback(
     async (wallet: Announced) => {
@@ -136,14 +93,20 @@ export default function Connect({ network, onBack }: { network: string; onBack: 
             throw switchError;
           }
         }
-        router.push("/rounds");
+        // Recorded before navigating, and by `rdns` rather than the announced
+        // uuid: a uuid is generated per page load, so it names the
+        // announcement rather than the wallet and would never match again.
+        // Everything downstream - the account the app displays, and the
+        // provider the SDK signs through - resolves from this.
+        remember(wallet.info.rdns);
+        router.push(destination);
       } catch (e) {
         setError(readableError(e));
       } finally {
         setBusy(null);
       }
     },
-    [router],
+    [destination, router],
   );
 
   return (
@@ -336,7 +299,7 @@ export default function Connect({ network, onBack }: { network: string; onBack: 
               >
                 Rabby
               </a>{" "}
-              or any other EVM wallet, then reload. Reading the docket needs no wallet at all.
+              or any other EVM wallet, then reload.
             </p>
             <button
               type="button"

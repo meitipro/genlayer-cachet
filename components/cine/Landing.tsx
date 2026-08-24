@@ -22,6 +22,7 @@ export default function Landing({
   menu,
   setMenu,
   onLaunch,
+  onNavigate,
 }: {
   network: string;
   /**
@@ -39,8 +40,31 @@ export default function Landing({
   menu: boolean;
   setMenu: (v: boolean) => void;
   onLaunch: () => void;
+  /**
+   * Where a header link should actually take the reader.
+   *
+   * The header does not navigate on its own any more: every destination in it
+   * is behind the wallet step, so the decision belongs to the parent that knows
+   * whether a wallet is connected.
+   */
+  onNavigate: (href: string) => void;
 }) {
   const closeMenu = () => setMenu(false);
+
+  /**
+   * Intercept a plain left click, and only that.
+   *
+   * The links stay real `href`s so that middle click, ctrl/cmd click and "open
+   * in new tab" keep working, and so the destination shows in the status bar.
+   * Swallowing modified clicks too would quietly break every one of those.
+   */
+  const guard = (href: string) => (e: React.MouseEvent) => {
+    closeMenu();
+    if (e.defaultPrevented) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    onNavigate(href);
+  };
 
   const networkLine = !configured
     ? "No contract configured"
@@ -138,13 +162,13 @@ export default function Landing({
 
         <div id="navwrap" data-open={menu ? "1" : "0"} style={{ display: "flex", alignItems: "center", flex: 1, zIndex: 5 }}>
           <nav id="navlinks" aria-label="Primary" style={{ position: "relative", display: "flex", marginLeft: "clamp(36px,3.03vw,48px)", gap: "clamp(32px,2.9vw,43px)" }}>
-            <Link href="/rounds" onClick={closeMenu} style={navLink}>
+            <Link href="/rounds" onClick={guard("/rounds")} style={navLink}>
               Docket
             </Link>
-            <Link href="/publish" onClick={closeMenu} style={navLink}>
+            <Link href="/publish" onClick={guard("/publish")} style={navLink}>
               Publish
             </Link>
-            <Link href="/docs" onClick={closeMenu} style={navLink}>
+            <Link href="/docs" onClick={guard("/docs")} style={navLink}>
               How it works
             </Link>
           </nav>

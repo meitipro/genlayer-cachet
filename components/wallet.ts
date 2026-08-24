@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "genlayer-js";
 
 import { ADD_CHAIN_PARAMS, CACHET, CHAIN, CHAIN_ID_HEX, IS_LIVE, NETWORK_LABEL } from "@/lib/chain";
+import { chosenProvider, remember, wallets } from "./providers";
 
 type Eip1193 = {
   request: (args: { method: string; params?: unknown[] | object }) => Promise<unknown>;
@@ -26,6 +27,15 @@ export type TxState = {
   message?: string;
 };
 
+/**
+ * The connected account, on the wallet the reader actually chose.
+ *
+ * Every provider call here goes through `chosenProvider()` rather than
+ * `window.ethereum`. The two are not the same thing when more than one wallet
+ * is installed, and the difference is an address: a bid is committed as a hash
+ * that binds the bidder's own address, so signing the reveal from a different
+ * wallet produces a commitment mismatch the contract is right to refuse.
+ */
 export function useWallet() {
   const [address, setAddress] = useState<string | null>(null);
   const [chainOk, setChainOk] = useState(false);
@@ -33,8 +43,14 @@ export function useWallet() {
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
-    const eth = typeof window !== "undefined" ? window.ethereum : undefined;
-    if (!eth) return;
+    const eth = await chosenProvider();
+    if (!eth) {
+      // No wallet chosen, or the chosen one is gone. Report disconnected rather
+      // than falling back to another wallet's accounts.
+      setAddress(null);
+      setChainOk(false);
+      return;
+    }
     try {
       const accounts = (await eth.request({ method: "eth_accounts" })) as string[];
       setAddress(accounts?.[0] ?? null);
@@ -46,25 +62,48 @@ export function useWallet() {
   }, []);
 
   useEffect(() => {
-    refresh();
-    const eth = typeof window !== "undefined" ? window.ethereum : undefined;
-    if (!eth?.on) return;
-    const onAccounts = () => refresh();
-    const onChain = () => refresh();
-    eth.on("accountsChanged", onAccounts);
-    eth.on("chainChanged", onChain);
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    (async () => {
+      await refresh();
+      const eth = await chosenProvider();
+      // The listeners have to go on the SAME provider we read from, or a
+      // wallet switch in one extension would refresh an account read from
+      // another.
+      if (cancelled || !eth?.on) return;
+      const onAccounts = () => refresh();
+      const onChain = () => refresh();
+      eth.on("accountsChanged", onAccounts);
+      eth.on("chainChanged", onChain);
+      stop = () => {
+        eth.removeListener?.("accountsChanged", onAccounts);
+        eth.removeListener?.("chainChanged", onChain);
+      };
+    })();
     return () => {
-      eth.removeListener?.("accountsChanged", onAccounts);
-      eth.removeListener?.("chainChanged", onChain);
+      cancelled = true;
+      stop?.();
     };
   }, [refresh]);
 
   const connect = useCallback(async () => {
     setError("");
-    const eth = typeof window !== "undefined" ? window.ethereum : undefined;
+    let eth = await chosenProvider();
     if (!eth) {
-      setError("No browser wallet found. Install one, then reload this page.");
-      return;
+      // Nothing chosen yet. With exactly one wallet installed there is no
+      // ambiguity, so connect it and remember it. With several, the choice is
+      // the reader's to make and the connect screen is where it is offered.
+      const found = await wallets();
+      if (found.length === 0) {
+        setError("No browser wallet found. Install one, then reload this page.");
+        return;
+      }
+      if (found.length > 1) {
+        setError("Several wallets are installed. Choose one from the connect screen.");
+        return;
+      }
+      remember(found[0].info.rdns);
+      eth = found[0].provider;
     }
     setBusy(true);
     try {
@@ -97,12 +136,30 @@ export function useWallet() {
 
 /**
  * Passing createClient a bare ADDRESS rather than a private key puts
- * genlayer-js into browser-wallet mode: it routes eth_sendTransaction through
- * window.ethereum and the user signs in their wallet. Handing it a key here
+ * genlayer-js into browser-wallet mode: it routes `eth_sendTransaction` to an
+ * EIP-1193 provider and the user signs in their wallet. Handing it a key here
  * would mean the page held one, which it must never do.
+ *
+ * The provider is passed EXPLICITLY, and that is the point. Left out, the SDK
+ * falls back to `window.ethereum` - `getCustomTransportConfig` reads
+ * `config.provider || window.ethereum` - which is whichever extension won the
+ * race to inject itself, not the wallet the reader picked on the connect
+ * screen. With two installed, the app would show one address and sign with
+ * another, and since a commitment hash binds the bidder's own address, the
+ * reveal would then be refused by a contract that was right to refuse it.
+ *
+ * Async because resolving the chosen wallet means asking the browser which
+ * wallets are announcing.
  */
-export function walletClient(address: string) {
-  return createClient({ chain: CHAIN, account: address as `0x${string}` });
+export async function walletClient(address: string) {
+  const provider = await chosenProvider();
+  return createClient({
+    chain: CHAIN,
+    account: address as `0x${string}`,
+    // Cast: the SDK brands its provider type, and re-deriving that brand here
+    // would couple this file to the SDK's internals for no runtime benefit.
+    ...(provider ? { provider: provider as never } : {}),
+  });
 }
 
 /**
@@ -122,7 +179,10 @@ export function walletClient(address: string) {
  * brands its hash and status types, and re-deriving those brands here would
  * couple this file to the SDK's internals for no runtime benefit.
  */
-export async function waitAccepted(client: ReturnType<typeof walletClient>, hash: string) {
+export async function waitAccepted(
+  client: Awaited<ReturnType<typeof walletClient>>,
+  hash: string,
+) {
   return client.waitForTransactionReceipt({
     hash: hash as never,
     status: "ACCEPTED" as never,

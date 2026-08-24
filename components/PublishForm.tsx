@@ -161,7 +161,7 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
     setFailed(false);
     setVerdict(null);
     try {
-      const client = walletClient(address);
+      const client = await walletClient(address);
       const digest = await criteriaDigest(texts);
 
       // A verdict is final in either direction, so re-asking is refused by the
@@ -240,7 +240,7 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
     setMessage("");
     setFailed(false);
     try {
-      const client = walletClient(address);
+      const client = await walletClient(address);
       if (budgetWei === null) {
         setFailed(true);
         setMessage("That budget does not convert to a non-zero amount.");

@@ -1,0 +1,42 @@
+{
+  "name": "cachet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 4100",
+    "build": "next build",
+    "start": "next start -p 4100",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test lib/*.test.ts && python contracts/test_helpers.py && python contracts/test_contract.py",
+    "test:contract": "python contracts/test_helpers.py && python contracts/test_contract.py",
+    "test:ui": "node --test lib/*.test.ts",
+    "check": "node scripts/check.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "seed": "node scripts/seed.mjs",
+    "status": "node scripts/status.mjs",
+    "settle": "node scripts/settle.mjs",
+    "injection": "node scripts/injection.mjs",
+    "bidder": "node scripts/bidder.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "genlayer-js": "^1.2.0",
+    "next": "^14.2.32",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@types/three": "^0.184.0",
+    "typescript": "5.5.3"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

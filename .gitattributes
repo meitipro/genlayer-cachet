@@ -1,0 +1,24 @@
+# Line endings are part of this project's correctness, not a style preference.
+#
+# contracts/cachet.py is hashed and compared against what is deployed on chain.
+# With git left to its own devices that comparison is platform dependent:
+# core.autocrlf rewrites the file to CRLF on a Windows checkout and LF
+# everywhere else, so the same commit produces two different digests and a
+# check that is meant to prove "the deployed bytes are the source" fails for
+# half the people who run it.
+#
+# Everything is therefore stored and checked out with LF, on every machine.
+
+* text=auto eol=lf
+
+# Binary. Never touched, never normalised.
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.mp4 binary
+*.pdf binary

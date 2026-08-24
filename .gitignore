@@ -1,0 +1,38 @@
+# dependencies and build output
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# secrets. CACHET_DEPLOYER_KEY is a real private key: it is generated locally,
+# read from the environment by the scripts, and must never be committed.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# resumable run state. Holds the bidder keys and salts for a seeded round, so
+# it is both machine-specific and sensitive.
+scripts/.seed-state.json
+
+# logs and OS noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# editors
+.idea/
+.vscode/
+
+# python bytecode
+__pycache__/
+*.py[cod]
+
+# local tooling config (dev-server launch profiles)
+.claude/
+
+# internal working notes, not part of the published project
+SUBMISSION.md

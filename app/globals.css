@@ -1,0 +1,1869 @@
+/*
+ * Cachet.
+ *
+ * A paper palette with ink sections cut into it. There is deliberately no
+ * light/dark toggle: the design uses both at once as a compositional device -
+ * the header, hero and footer are ink, the record is cream - and a theme
+ * switch would be fighting the layout rather than serving a reader.
+ *
+ * Every foreground/background pair below is measured. The one pair that does
+ * not clear 4.5:1 is --accent on --ink (2.73), which is why --accent never
+ * carries text on an ink surface; --accent-ink is the ink-safe accent, and the
+ * status dots on dark use it too so they clear 3:1 as UI indicators.
+ *
+ * Grid columns live in classes here, never in inline styles on an element:
+ * an inline `grid-template-columns` cannot be overridden by a media query, so
+ * a three-column table stays three columns at 360px wide.
+ */
+
+:root {
+  /* paper */
+  --cream: #f1ead9;
+  --paper: #fbf6ea;
+  --paper-2: #fcf8ef;
+  --band: #ede5d3;
+  --band-2: #ebe2cf;
+
+  /* ink */
+  --ink: #16130e;
+  /*
+   * The dark slab, as its own token.
+   *
+   * `--ink` was doing two jobs: the text colour on paper, AND the background
+   * of every panel cut out of it. Those are the same value in a light build
+   * and opposite values in a dark one, so on the dark palette flipping --ink
+   * to light fixed all the text and turned thirteen dark panels white with
+   * white text on them. A colour that means "dark surface" has to say so.
+   */
+  --slab: #16130e;
+  --ink-panel: #1d1a13;
+  --ink-panel-2: #211d15;
+
+  /* rules */
+  --line: #c9bda4;
+  --line-soft: #e3d9c4;
+  --line-softer: #ede3ce;
+  --line-dim: #d8ceb9;
+  --line-dimmer: #dfd5bf;
+  --ink-line: #35302a;
+  --ink-line-2: #4a4335;
+  --ink-line-3: #2a251c;
+
+  /* text on paper */
+  --body: #4b463a;
+  --muted: #5f5847;
+  --faint: #6b6353;
+
+  /* text on ink */
+  --on-ink: #f1ead9;
+  --on-ink-bright: #c9c0ac;
+  --on-ink-dim: #a79e8b;
+  --on-ink-faint: #9a9080;
+
+  /* accent */
+  --accent: #a6321f;
+  --accent-dark: #8c2818;
+  --accent-ink: #e8785e;
+  /* The accent at roughly 12% over paper, resolved to a flat value rather than
+     a color-mix: an alpha tint composites differently depending on what it
+     lands on, and a contrast figure measured against one surface would then be
+     wrong on another. --muted reads 5.42:1 on this. */
+  --accent-wash: #f1ded2;
+  /*
+   * Surfaces that are FILLED with the accent, as opposed to text drawn in it.
+   * They need their own token because the two swap on a dark palette: --accent
+   * becomes the light salmon there, so a chip that was deep wax with pale text
+   * would render pale on pale. --accent-fill stays dark enough to carry
+   * --on-accent in either theme.
+   */
+  --accent-fill: #a6321f;
+  --accent-fill-hover: #8c2818;
+  --chip-border: #e0c4bc;
+  --invert-hover-bg: #ffffff;
+  /* The warning note, as a set rather than four loose hex values. */
+  --warn-border: #d9b8ae;
+  --warn-bg: #f7e6e0;
+  --warn-fg: #6d3125;
+  --warn-strong: #5a2419;
+  /* Refusal text. Deep wax on paper; on the dark build the same hue has to
+     come up to meet the page or an error message is the one sentence on the
+     screen nobody can read. */
+  --error-fg: #8c2818;
+  --on-accent: #f6eede;
+  --on-accent-dim: #f7ddd6;
+  --on-accent-faint: #f3d9d2;
+
+  /*
+   * Context tokens.
+   *
+   * Every dark surface re-points these, and every component reads them instead
+   * of naming a light or dark colour directly. The alternative - a `.on-ink X`
+   * override per component - silently fails the moment a dark surface does not
+   * happen to carry that class, which is exactly what went wrong here: the
+   * hero and the footer are ink, were not `.on-ink`, and every label on them
+   * rendered at 3.12:1 while a ghost button rendered ink-on-ink at 1.0:1,
+   * invisible. Inheritance cannot forget.
+   */
+  --label-fg: var(--faint);
+  --note-fg: var(--muted);
+  --rule: var(--line);
+  --ghost-border: var(--ink);
+  --ghost-fg: var(--ink);
+  --ghost-hover-bg: var(--ink);
+  --ghost-hover-fg: var(--cream);
+  --accent-fg: var(--accent);
+  /* Links get their own token because `a { color: var(--accent) }` puts the
+     one failing pair in the palette - accent on ink, 2.73:1 - onto every
+     explorer link that happens to sit in a dark header. */
+  --link-fg: var(--accent);
+  --link-hover-fg: var(--accent-dark);
+
+  --shell: 1240px;
+  --gutter: 28px;
+
+  --mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: var(--font-sans), system-ui, -apple-system, sans-serif;
+}
+
+/*
+ * The dark surface, as a token swap.
+ *
+ * The cinematic handoff is dark; every page in this app was built light. The
+ * cheap way to reconcile those is a second stylesheet per page, and it is the
+ * wrong way: it duplicates every rule and the two copies drift the first time
+ * anybody edits one of them.
+ *
+ * Instead the palette is re-pointed here, once. Every component already reads
+ * these tokens rather than naming a colour, so the whole site turns over
+ * together and a rule written for the light build keeps working on the dark
+ * one. That is precisely what the context-token layer below was built for.
+ *
+ * Dark is the default, matching the handoff. `data-theme="light"` on the root
+ * puts the original paper palette back, and no attribute at all means "follow
+ * the system", resolved by the media query.
+ */
+:root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  --cream: #0b0907;
+  --paper: #120e0b;
+  --paper-2: #171210;
+  --band: #14100c;
+  --band-2: #100d0a;
+
+  --ink: #f1ead9;
+  --slab: #1d1a13;
+  --ink-panel: #241f18;
+  --ink-panel-2: #211d15;
+
+  --line: rgba(241, 234, 217, 0.13);
+  --line-soft: rgba(241, 234, 217, 0.09);
+  --line-softer: rgba(241, 234, 217, 0.06);
+  --line-dim: rgba(241, 234, 217, 0.11);
+  --line-dimmer: rgba(241, 234, 217, 0.08);
+  --ink-line: rgba(241, 234, 217, 0.13);
+  --ink-line-2: rgba(241, 234, 217, 0.2);
+  --ink-line-3: rgba(241, 234, 217, 0.09);
+
+  /* Measured against --paper #120e0b: body 9.4:1, muted 7.4:1, faint 5.9:1. */
+  --body: #ddd5c6;
+  --muted: #c3baa9;
+  --faint: #a79e8b;
+
+  --on-ink: #f1ead9;
+  --on-ink-bright: #c9c0ac;
+  --on-ink-dim: #a79e8b;
+  --on-ink-faint: #9a9080;
+
+  /* On a dark surface the light-build accent is the failing pair, so the two
+     swap roles: --accent-ink carries text and --accent stays for fills. */
+  --accent: #e8785e;
+  --accent-dark: #f3a08c;
+  --accent-ink: #e8785e;
+  --accent-wash: #24170f;
+  /* Deep wax, so pale text on a filled chip still reads: 7.48:1. */
+  --accent-fill: #8c2818;
+  --accent-fill-hover: #a6321f;
+  --chip-border: rgba(232, 120, 94, 0.36);
+  --invert-hover-bg: #f6eede;
+  --warn-border: rgba(232, 120, 94, 0.34);
+  --warn-bg: #2a1611;
+  --warn-fg: #f0c3b6;
+  --warn-strong: #f6d8ce;
+  --error-fg: #f0a08c;
+
+  --label-fg: var(--on-ink-faint);
+  --note-fg: var(--on-ink-dim);
+  --rule: var(--ink-line);
+  --ghost-border: var(--ink-line-2);
+  --ghost-fg: var(--on-ink);
+  --ghost-hover-bg: rgba(241, 234, 217, 0.06);
+  --ghost-hover-fg: var(--on-ink);
+  --accent-fg: var(--accent-ink);
+  --link-fg: var(--accent-ink);
+  --link-hover-fg: var(--on-ink);
+}
+
+/*
+ * The ink-context list below re-points these tokens for dark SECTIONS of the
+ * light build. On the dark build those sections are already the page colour,
+ * so the overrides have to be neutralised or a "dark" band inside a dark page
+ * lands lighter than its surroundings.
+ */
+:root[data-theme="dark"] .on-ink,
+:root:not([data-theme="light"]) .on-ink {
+  background: var(--paper-2);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  text-wrap: pretty;
+}
+
+a {
+  color: var(--link-fg);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--link-hover-fg);
+}
+
+::selection {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+/* Keyboard focus has to survive on cream, on ink and on the accent block. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.on-ink :focus-visible,
+.on-accent :focus-visible {
+  outline-color: var(--on-accent);
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+figure {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
+
+/* --------------------------------------------------------------------- */
+/* Layout                                                                 */
+/* --------------------------------------------------------------------- */
+
+.shell {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+.section {
+  padding: clamp(52px, 6.5vw, 92px) 0;
+}
+
+.section-tight {
+  padding: clamp(36px, 4.5vw, 60px) 0;
+}
+
+/*
+ * Anything with an ink background, whether or not it is `.on-ink`. Adding a
+ * new dark surface means adding it to this list - and nothing else.
+ */
+.on-ink,
+.hero,
+.footer,
+.chrome,
+.rulebar,
+.header,
+.step.last,
+.timeline-step.now,
+.score-row-total,
+.compare-col:last-child {
+  --label-fg: var(--on-ink-faint);
+  --note-fg: var(--on-ink-dim);
+  --rule: var(--ink-line);
+  --ghost-border: var(--ink-line-2);
+  --ghost-fg: var(--on-ink);
+  --ghost-hover-bg: transparent;
+  --ghost-hover-fg: var(--on-ink);
+  --accent-fg: var(--accent-ink);
+  --link-fg: var(--accent-ink);
+  --link-hover-fg: var(--on-ink);
+}
+
+.on-ink {
+  background: var(--slab);
+  color: var(--on-ink);
+}
+
+.on-band {
+  background: var(--band);
+  border-top: 1px solid var(--line);
+}
+
+.on-cream {
+  background: var(--cream);
+}
+
+.on-accent {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-top: 1px solid var(--accent-dark);
+}
+
+.rule-top {
+  border-top: 1px solid var(--line);
+}
+
+/* Section heading: eyebrow left, note right, hairline under. */
+.eyebrow-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 14px;
+  margin-bottom: 34px;
+}
+
+.mono {
+  font-family: var(--mono);
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.eyebrow-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--note-fg);
+  text-transform: uppercase;
+}
+
+.label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--label-fg);
+  text-transform: uppercase;
+}
+
+.display {
+  font-weight: 800;
+  font-size: clamp(30px, 3.8vw, 48px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  margin: 0 0 16px;
+}
+
+.display em {
+  font-style: italic;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.on-ink .display em,
+.on-accent .display em {
+  color: var(--accent-ink);
+}
+
+.on-accent .display em {
+  color: inherit;
+}
+
+.lede {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--body);
+  max-width: 62ch;
+  margin: 0 0 40px;
+}
+
+.on-ink .lede {
+  color: var(--on-ink-dim);
+}
+
+.prose p {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--body);
+  max-width: 68ch;
+  margin: 0 0 14px;
+}
+
+.prose h3 {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 30px 0 10px;
+}
+
+.prose ul {
+  padding-left: 18px;
+  margin: 0 0 16px;
+}
+
+.prose li {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--body);
+  margin-bottom: 7px;
+  max-width: 66ch;
+}
+
+/* --------------------------------------------------------------------- */
+/* Grids - every column count is here, none inline                        */
+/* --------------------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.grid > * {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.grid-auto-160 {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+.grid-auto-190 {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.grid-auto-240 {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.grid-auto-290 {
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+}
+
+.stat {
+  padding: 22px 24px;
+}
+
+.stat-value {
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.stat-value small {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--note-fg);
+}
+
+.stat .label {
+  margin-bottom: 9px;
+}
+
+/* --------------------------------------------------------------------- */
+/* Buttons                                                                */
+/* --------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 14px 22px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+/* Filled, so it takes --accent-fill rather than --accent: see that token. */
+.btn-primary {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-fill-hover);
+  color: var(--on-accent);
+}
+
+.btn-ghost {
+  border-color: var(--ghost-border);
+  color: var(--ghost-fg);
+  background: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--ghost-hover-bg);
+  border-color: var(--ghost-hover-fg);
+  color: var(--ghost-hover-fg);
+}
+
+.btn-invert {
+  background: var(--on-accent);
+  color: var(--accent);
+}
+.btn-invert:hover:not(:disabled) {
+  background: var(--invert-hover-bg);
+  color: var(--accent-dark);
+}
+
+.btn-small {
+  font-size: 13px;
+  padding: 9px 15px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------- */
+/* Panels, tags, notes                                                    */
+/* --------------------------------------------------------------------- */
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+}
+
+.panel-body {
+  padding: 20px 22px;
+}
+
+.card {
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+  box-shadow: 10px 10px 0 rgba(22, 19, 14, 0.09);
+}
+
+.chrome {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--slab);
+  color: var(--on-ink-bright);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  flex-wrap: wrap;
+}
+
+.chrome-dots {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.chrome-dots i {
+  width: 9px;
+  height: 9px;
+  background: var(--ink-line-2);
+  display: block;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.tag i {
+  width: 6px;
+  height: 6px;
+  display: block;
+  background: currentColor;
+  flex: none;
+}
+
+.tag-live {
+  color: var(--accent-fg);
+}
+.tag-quiet {
+  color: var(--note-fg);
+}
+
+.weight-chip {
+  display: inline-block;
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid var(--chip-border);
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.primary-chip {
+  display: inline-block;
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--on-accent);
+  background: var(--accent-fill);
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.note {
+  border: 1px solid var(--line);
+  background: var(--band);
+  padding: 14px 16px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.note strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.note-warn {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+.note-warn strong {
+  color: var(--warn-strong);
+}
+
+.hash {
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--muted);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.row-between {
+  justify-content: space-between;
+}
+
+.spacer {
+  height: clamp(28px, 4vw, 52px);
+}
+
+/* --------------------------------------------------------------------- */
+/* Scorecard                                                              */
+/* --------------------------------------------------------------------- */
+
+.scroller {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.score-table {
+  min-width: 720px;
+}
+
+.score-table-solo {
+  min-width: 480px;
+}
+
+/*
+ * Column counts live here, NEVER in an inline style on the element.
+ *
+ * An inline `grid-template-columns` beats a stylesheet rule at every
+ * specificity including inside a media query, so a three-column comparison set
+ * inline stays three columns at 360px wide and the mobile fallback below never
+ * fires at all. Nothing about that is visible until someone opens it on a
+ * phone - which is exactly where a losing bidder reads their scorecard.
+ */
+.score-row {
+  display: grid;
+  align-items: start;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line-softer);
+  gap: 0;
+}
+
+.score-row.compare {
+  grid-template-columns: 1.5fr 1fr 1fr;
+}
+
+.score-row.solo {
+  grid-template-columns: 1.5fr 1fr;
+}
+
+.score-row-head {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--faint);
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+  text-transform: uppercase;
+  align-items: center;
+}
+
+.score-row-total {
+  background: var(--slab);
+  color: var(--on-ink);
+  border-bottom: none;
+  align-items: baseline;
+  padding: 20px 24px;
+}
+
+.score-cell {
+  border-left: 1px solid var(--line-softer);
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.score-row-total .score-cell {
+  border-left-color: var(--ink-line);
+}
+
+.score-criterion {
+  padding-right: 20px;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.pips {
+  display: inline-flex;
+  gap: 3px;
+  flex: none;
+}
+.pips i {
+  width: 12px;
+  height: 7px;
+  display: block;
+  background: var(--line-dim);
+}
+.pips i.on {
+  background: var(--slab);
+}
+.pips-accent i.on {
+  background: var(--accent);
+}
+
+.score-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+}
+
+.score-num {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.score-reason {
+  font-size: 12.5px;
+  color: var(--faint);
+  line-height: 1.4;
+}
+
+.total-big {
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+.total-big.win {
+  color: var(--accent-ink);
+}
+
+.total-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--on-ink-dim);
+}
+
+/* Below 760px the three-column comparison stops being a comparison. Each
+   scorecard becomes its own block, which is the only readable form on a
+   phone - and the phone is where a losing bidder actually opens this. */
+@media (max-width: 760px) {
+  .score-table,
+  .score-table-solo {
+    min-width: 0;
+  }
+  .score-row,
+  .score-row.compare,
+  .score-row.solo {
+    grid-template-columns: 1fr;
+    padding: 16px 18px;
+    gap: 10px;
+  }
+  .score-row-head {
+    display: none;
+  }
+  .score-cell {
+    border-left: none;
+    border-top: 1px solid var(--line-softer);
+    padding: 10px 0 0;
+  }
+  .score-row-total .score-cell {
+    border-top-color: var(--ink-line);
+  }
+  .score-cell::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: var(--label-fg);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .score-criterion {
+    padding-right: 0;
+  }
+}
+
+/* --------------------------------------------------------------------- */
+/* Timeline                                                               */
+/* --------------------------------------------------------------------- */
+
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.timeline-step {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 18px 20px;
+  background: var(--paper);
+}
+
+.timeline-step.done {
+  background: var(--band);
+}
+
+.timeline-step.now {
+  background: var(--slab);
+  color: var(--on-ink);
+}
+
+
+.timeline-name {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  margin: 8px 0 6px;
+}
+
+.timeline-when {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--note-fg);
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------- */
+/* Forms                                                                  */
+/* --------------------------------------------------------------------- */
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.field > .label {
+  display: block;
+  margin-bottom: 7px;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  padding: 11px 13px;
+}
+
+.textarea {
+  min-height: 220px;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.input-mono {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0 16px;
+}
+
+.criterion-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 96px 40px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 620px) {
+  .criterion-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .criterion-row > *:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.help {
+  font-size: 12.5px;
+  color: var(--faint);
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.error {
+  font-size: 13px;
+  color: var(--error-fg);
+  line-height: 1.5;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+/* --------------------------------------------------------------------- */
+/* Header, rule bar, footer, ticker                                       */
+/* --------------------------------------------------------------------- */
+
+.rulebar {
+  background: var(--slab);
+  color: var(--on-ink-dim);
+  border-bottom: 1px solid var(--ink-line);
+}
+
+.rulebar-inner {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 7px var(--gutter);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+}
+
+.rulebar-mark {
+  color: var(--accent-ink);
+}
+
+.rulebar-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rulebar-status i {
+  width: 6px;
+  height: 6px;
+  background: var(--accent-ink);
+  display: block;
+  flex: none;
+}
+
+.blink {
+  animation: blink 2.4s steps(1) infinite;
+}
+
+@keyframes blink {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  61%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(22, 19, 14, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--ink-line);
+}
+
+.header-inner {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--on-ink);
+  padding: 16px 22px 16px 0;
+  border-right: 1px solid var(--ink-line);
+}
+.brand:hover {
+  color: var(--on-ink);
+}
+
+.brand-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.brand-name b {
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.brand-name span {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--on-ink-dim);
+  margin-top: 4px;
+}
+
+.nav {
+  display: flex;
+  align-items: stretch;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.08em;
+  flex-wrap: wrap;
+}
+
+.nav a {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  color: var(--on-ink-bright);
+  border-right: 1px solid var(--ink-line);
+}
+
+.nav a:hover {
+  color: var(--on-ink);
+  background: var(--ink-panel-2);
+}
+
+.nav a[aria-current="page"] {
+  color: var(--on-ink);
+  background: var(--ink-panel-2);
+  box-shadow: inset 0 -2px 0 var(--accent-ink);
+}
+
+.header-cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  padding: 0 22px;
+}
+.header-cta:hover {
+  background: var(--accent-dark);
+  color: var(--on-accent);
+}
+
+@media (max-width: 900px) {
+  .brand {
+    padding-right: 16px;
+  }
+  .header-cta {
+    padding: 12px 18px;
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+    border-top: 1px solid var(--ink-line);
+  }
+}
+
+.ticker {
+  border-top: 1px solid var(--ink-line);
+  border-bottom: 1px solid var(--line-dim);
+  background: var(--band-2);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ticker-track {
+  display: inline-flex;
+  animation: ticker 38s linear infinite;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  padding: 9px 0;
+  will-change: transform;
+}
+
+.ticker-track span {
+  padding: 0 20px;
+}
+.ticker-track b {
+  color: var(--accent);
+  font-weight: 400;
+}
+
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.footer {
+  background: var(--slab);
+  color: var(--on-ink-dim);
+}
+
+.footer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  border-left: 1px solid var(--ink-line);
+  border-right: 1px solid var(--ink-line);
+}
+
+.footer-col {
+  padding: 36px 24px;
+  border-right: 1px solid var(--ink-line);
+}
+.footer-col:last-child {
+  border-right: none;
+}
+
+.footer-col ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  font-size: 13.5px;
+}
+
+.footer-col a {
+  color: var(--on-ink-dim);
+}
+.footer-col a:hover {
+  color: var(--on-ink);
+}
+
+.footer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  border-top: 1px solid var(--ink-line);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--on-ink-faint);
+}
+
+/* --------------------------------------------------------------------- */
+/* Hero                                                                   */
+/* --------------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  background: var(--slab);
+  color: var(--on-ink);
+  background-image: repeating-linear-gradient(
+      90deg,
+      rgba(241, 234, 217, 0.045) 0 1px,
+      transparent 1px 96px
+    ),
+    repeating-linear-gradient(0deg, rgba(241, 234, 217, 0.03) 0 1px, transparent 1px 96px);
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  border-left: 1px solid var(--ink-line);
+  border-right: 1px solid var(--ink-line);
+}
+
+.hero-copy {
+  padding: clamp(44px, 5.5vw, 74px) clamp(24px, 3vw, 44px) clamp(40px, 5vw, 64px);
+  border-right: 1px solid var(--ink-line);
+}
+
+.hero-title {
+  font-weight: 800;
+  font-size: clamp(34px, 4.6vw, 60px);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  margin: 0 0 26px;
+}
+
+.hero-title em {
+  font-style: italic;
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.hero-lede {
+  font-size: 17.5px;
+  line-height: 1.55;
+  color: var(--on-ink-dim);
+  max-width: 46ch;
+  margin: 0 0 32px;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--ink-line-2);
+  padding: 6px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--on-ink-dim);
+  margin-bottom: 30px;
+  text-transform: uppercase;
+}
+
+.hero-badge i {
+  width: 6px;
+  height: 6px;
+  background: var(--accent-ink);
+  display: block;
+  flex: none;
+}
+
+.hero-seal {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: clamp(340px, 42vw, 540px);
+  overflow: hidden;
+}
+
+.hero-seal-shadow {
+  position: absolute;
+  width: 74%;
+  height: 38%;
+  bottom: 12%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.62) 0%,
+    rgba(0, 0, 0, 0) 68%
+  );
+  filter: blur(6px);
+}
+
+.hero-seal-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid var(--ink-line);
+}
+.hero-seal-ring.inner {
+  width: 56%;
+  padding-bottom: 56%;
+}
+.hero-seal-ring.outer {
+  width: 78%;
+  padding-bottom: 78%;
+  border-color: var(--ink-line-3);
+}
+
+.hero-seal-caption {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--ink-line);
+  border-right: 1px solid var(--ink-line);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--on-ink-faint);
+}
+
+.terminal {
+  border: 1px solid var(--ink-line-2);
+  background: var(--ink-panel);
+  margin-bottom: 26px;
+}
+
+.terminal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--ink-line);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--on-ink-faint);
+}
+
+.terminal-body {
+  padding: 15px 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--on-ink);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.terminal-body em {
+  color: var(--accent-ink);
+  font-style: normal;
+}
+.terminal-body b {
+  color: var(--on-ink-bright);
+  font-weight: 400;
+}
+
+.caret {
+  display: inline-block;
+  width: 8px;
+  height: 15px;
+  background: var(--accent-ink);
+  vertical-align: -2px;
+  margin-left: 6px;
+  animation: blink 1.1s steps(1) infinite;
+}
+
+/* --------------------------------------------------------------------- */
+/* Steps / docket cards                                                   */
+/* --------------------------------------------------------------------- */
+
+.step {
+  padding: 26px 22px;
+  background: var(--paper);
+}
+
+.step.last {
+  background: var(--slab);
+  color: var(--on-ink);
+}
+
+.step-num {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent-fg);
+  margin-bottom: 26px;
+}
+
+.step-num span:last-child {
+  color: var(--label-fg);
+}
+
+.step-name {
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 9px;
+  letter-spacing: -0.02em;
+}
+
+.step-body {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--note-fg);
+}
+
+.docket-card {
+  display: block;
+  color: var(--ink);
+  background: var(--paper);
+  padding: 24px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.docket-card:hover {
+  background: var(--slab);
+  color: var(--on-ink);
+}
+.docket-card:hover .docket-meta,
+.docket-card:hover .docket-id {
+  color: var(--on-ink-dim);
+  border-color: var(--ink-line);
+}
+
+.docket-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.docket-id {
+  color: var(--faint);
+}
+
+.docket-title {
+  font-weight: 700;
+  font-size: 20px;
+  line-height: 1.15;
+  margin-bottom: 20px;
+  letter-spacing: -0.02em;
+}
+
+.docket-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  border-top: 1px solid var(--line-soft);
+  padding-top: 15px;
+}
+
+/* --------------------------------------------------------------------- */
+/* Compare list (without / with)                                          */
+/* --------------------------------------------------------------------- */
+
+.compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  margin-top: 44px;
+  border: 1px solid var(--line);
+}
+
+.compare-col {
+  padding: 28px 26px;
+  background: var(--cream);
+  border-right: 1px solid var(--line);
+}
+.compare-col:last-child {
+  border-right: none;
+  background: var(--slab);
+  color: var(--on-ink);
+}
+
+.compare-col ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.compare-col li {
+  display: flex;
+  gap: 12px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--muted);
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line-dimmer);
+}
+.compare-col li:last-child {
+  border-bottom: none;
+}
+
+.compare-col:last-child li {
+  color: var(--on-ink);
+  border-bottom-color: var(--ink-line);
+}
+.compare-col:last-child li span:first-child {
+  color: var(--accent-ink);
+}
+
+/* --------------------------------------------------------------------- */
+/* Misc                                                                   */
+/* --------------------------------------------------------------------- */
+
+.grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.05;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/*
+ * The skip link keeps ONE pair in both themes, deliberately.
+ *
+ * It used to read `--accent` on `--on-accent`. Those two swap roles between
+ * the light and dark palettes - on dark, --accent is the light salmon - so on
+ * the dark build it rendered light on light at 2.5:1: an accessibility
+ * affordance that had itself become unreadable, and only at the moment it
+ * appears. The deep wax below is 7.48:1 against this foreground on every
+ * surface the link can land on.
+ */
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: #8c2818;
+  color: #f6eede;
+  padding: 10px 16px;
+  z-index: 100;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.skip:focus {
+  left: 8px;
+  top: 8px;
+  color: #f6eede;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.banner {
+  background: var(--band);
+  border-bottom: 1px solid var(--line);
+}
+
+.banner-inner {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 10px var(--gutter);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
+
+.banner-inner b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* A window shutting under the reader is the one banner that has to interrupt,
+   so it takes the accent rule rather than the quiet band the others share. */
+.banner-stale {
+  background: var(--accent-wash);
+  border-bottom-color: var(--accent);
+  border-top: 2px solid var(--accent);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.link-btn {
+  font: inherit;
+  letter-spacing: inherit;
+  color: var(--link-fg);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-btn:hover {
+  color: var(--link-hover-fg);
+}
+
+/* Tabular figures so a ticking countdown does not shuffle the words beside it
+   sideways once a second as the digits change width. */
+.tick {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--faint);
+  font-size: 15px;
+  line-height: 1.6;
+  border: 1px dashed var(--line);
+  background: var(--paper);
+}
+
+.breadcrumb {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--label-fg);
+  margin-bottom: 18px;
+  text-transform: uppercase;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border-bottom: 1px solid var(--ink);
+}
+
+.kv > div {
+  padding: 20px 24px;
+  border-right: 1px solid var(--line-soft);
+}
+.kv > div:last-child {
+  border-right: none;
+}
+
+.kv-value {
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.kv-value small {
+  font-size: 13px;
+  color: var(--faint);
+  font-weight: 600;
+}
+
+/* One tender on a bidder's record: a wide row rather than a card, because the
+   interesting part is the comparison down the column - which of these did they
+   open, which scored, which won. */
+.entered-row {
+  display: block;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+  padding: 16px 20px;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.entered-row + .entered-row {
+  border-top-color: var(--line-softer);
+}
+
+.entered-row:hover {
+  background: var(--slab);
+  color: var(--on-ink);
+  border-color: var(--ink-line);
+}
+
+.entered-row:hover .entered-meta,
+.entered-row:hover .docket-id {
+  color: var(--on-ink-dim);
+}
+
+.entered-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.entered-title {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  /* Takes the slack so the status tag sits hard right, and shrinks before it
+     pushes the tag onto its own line. */
+  flex: 1 1 12ch;
+  min-width: 0;
+}
+
+.entered-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+}
+
+.entered-won {
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+.entered-row:hover .entered-won {
+  color: var(--accent-ink);
+}
+
+/* A qualifier under a headline figure: "78% of scored bids", "deposit
+   forfeited". Never carries the number itself. */
+.stat-note {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+/* An address inside a bid heading. Underlined on hover only, so a column of
+   them does not read as a wall of links. */
+.bidder-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+
+.bidder-link:hover {
+  color: inherit;
+  border-bottom-style: solid;
+}
+
+/* The buyer's answer, set into the question panel it belongs to. The accent
+   rule on the left is what makes a column of these scannable: you can see at a
+   glance which questions were actually answered. */
+.answer {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: var(--band);
+  border-left: 3px solid var(--accent);
+}
+
+/* The one item in a docket card's meta row that is a call on the reader rather
+   than a fact about the round. */
+.docket-flag {
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+.docket-card:hover .docket-flag {
+  color: var(--accent-ink);
+}

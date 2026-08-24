@@ -1,0 +1,233 @@
+/*
+ * Cachet - the cinematic shell.
+ *
+ * Ported from the "Cachet Cinematic" design handoff, not rebuilt by eye: the
+ * block below is the handoff's own stylesheet with two changes, and only two.
+ *
+ *   1. The two Google font families are replaced with --sans / --mono, which
+ *      resolve to the self-hosted faces declared in app/layout.tsx. next/font
+ *      downloads a Google family at BUILD time and, when fonts.googleapis.com
+ *      is unreachable, retries three times and then carries on with a warning -
+ *      so the build stays green while the site ships a system fallback. On a
+ *      design that is almost entirely typography that is the worst failure mode
+ *      available: invisible in CI, obvious to every reader.
+ *   2. The overflow lock on html and body is scoped to the cinematic route
+ *      only, through a .cine class on the root element. Applied globally it
+ *      would trap every long page - the docs, the docket - at one viewport
+ *      height with no way to scroll.
+ *
+ * Everything else is the handoff verbatim, including the responsive rules, so
+ * a re-sync diffs cleanly against the source rather than against a rewrite.
+ */
+
+*{box-sizing:border-box}
+  html,body{background:#0B0907;margin:0;min-height:100%}
+  html.cine,html.cine body{overflow:hidden;height:100%}
+  body{font-family:var(--sans);color:#F1EAD9;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  a{color:#E8785E;text-decoration:none}
+  a:hover{color:#F1EAD9}
+  ::selection{background:#A6321F;color:#F6EEDE}
+  button,a{transition:filter 140ms ease,opacity 140ms ease}
+  button:hover,a:hover{filter:brightness(1.08)}
+  button:focus-visible,a:focus-visible{outline:2px solid #F1EAD9;outline-offset:3px}
+  @keyframes en-brand{from{opacity:0;transform:translateY(7px) scale(.94)}to{opacity:1;transform:none}}
+  @keyframes en-nav{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  @keyframes en-action{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+  @keyframes en-line{from{transform:translate3d(0,110%,0) skewY(2deg)}to{transform:none}}
+  @keyframes en-copy{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes en-card{from{opacity:0;transform:translateY(12px) scale(.968)}to{opacity:1;transform:none}}
+  @keyframes en-app{from{opacity:0;transform:translateY(14px) scale(.99)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){*{animation:none !important;opacity:1 !important;transform:none !important}}
+  #appmain{overflow-x:hidden}
+  #appmain::-webkit-scrollbar{width:9px}
+  #appmain::-webkit-scrollbar-track{background:var(--tint2)}
+  #appmain::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
+  #apprail a[data-active="1"]{background:rgba(166,50,31,.15);border-color:rgba(232,120,94,.34) !important;color:var(--fg) !important;font-weight:500 !important}
+  #appmain input,#appmain select,#appmain textarea{font-family:var(--sans);font-size:14px;color:var(--fg);background:var(--tint);border:1px solid var(--line);border-radius:6px;padding:10px 12px;width:100%}
+  #appmain input:focus,#appmain select,#appmain textarea:focus{outline:none;border-color:rgba(232,120,94,.5)}
+  #appmain input::placeholder,#appmain textarea::placeholder{color:var(--dim2)}
+  [data-secbody][data-open="0"]{display:none !important}
+
+  /* --- 1. custom cursor --- */
+  @media (hover:hover) and (pointer:fine){
+    html,body,a,button,input,textarea,select,[role="dialog"]{cursor:none !important}
+    #cur,#curRing{position:fixed;top:0;left:0;z-index:10000;pointer-events:none;will-change:transform}
+    #cur,#curRing{opacity:0;transition:opacity 220ms ease}
+    #cur{width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:#F6EEDE;box-shadow:0 0 10px rgba(246,238,222,.5)}
+    #curRing{width:32px;height:32px;margin:-16px 0 0 -16px;border:1px solid rgba(232,120,94,.62);border-radius:50%;transition:width 160ms ease,height 160ms ease,margin 160ms ease,border-color 160ms ease,background 160ms ease}
+    #curRing[data-hot="1"]{width:46px;height:46px;margin:-23px 0 0 -23px;border-color:#E8785E;background:rgba(166,50,31,.16)}
+    #curRing[data-down="1"]{width:24px;height:24px;margin:-12px 0 0 -12px}
+    #curRing::after{content:'';position:absolute;inset:-5px;border:1px solid rgba(241,234,217,.10);border-radius:50%}
+  }
+  @media (hover:none),(pointer:coarse){#cur,#curRing{display:none}}
+
+  /* --- 2. buttons --- */
+  button{position:relative;overflow:hidden;transform:translateZ(0)}
+  button::after{content:'';position:absolute;top:0;left:-120%;width:70%;height:100%;pointer-events:none;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.30),transparent);transition:left 620ms cubic-bezier(.22,1,.36,1)}
+  button:hover::after{left:150%}
+  button:active{transform:translateY(1px) scale(.985)}
+  #signup:hover,[data-tx]:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 3px 14px rgba(0,0,0,.42),0 0 30px rgba(166,50,31,.5)}
+  #appmain button:not([data-sec]):hover,[role="dialog"] button:hover{border-color:rgba(241,234,217,.4)}
+
+  /* --- 3. logo intro --- */
+  @keyframes lg-in{0%{opacity:0;transform:scale(.42) rotate(-26deg)}62%{opacity:1;transform:scale(1.1) rotate(4deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+  @keyframes lg-press{0%,54%{transform:scale(1)}64%{transform:scale(.9)}78%{transform:scale(1.04)}100%{transform:scale(1)}}
+  @keyframes lg-ring{from{transform:rotate(0);opacity:0}30%{opacity:.85}to{transform:rotate(150deg);opacity:.85}}
+  @keyframes lg-draw{from{stroke-dashoffset:640}to{stroke-dashoffset:0}}
+  @keyframes lg-c{0%{opacity:0;transform:scale(2.4)}70%{opacity:1;transform:scale(.94)}100%{opacity:1;transform:scale(1)}}
+  @keyframes lg-shock{0%{opacity:0;transform:scale(.5)}22%{opacity:.6}100%{opacity:0;transform:scale(2.3)}}
+  @keyframes lg-word{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  @keyframes lg-bar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  @keyframes lg-out{from{opacity:1}to{opacity:0;transform:scale(1.07)}}
+
+  /* --- glass (sign-up ref) --- */
+  .gbtn{position:relative;overflow:visible;border:none;border-radius:9999px;cursor:pointer;
+    background:linear-gradient(-75deg,rgba(241,234,217,.05),rgba(241,234,217,.17),rgba(241,234,217,.05));
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);color:#F1EAD9;
+    box-shadow:inset 0 2px 2px rgba(255,255,255,.07),inset 0 -2px 2px rgba(0,0,0,.45),0 4px 10px -2px rgba(0,0,0,.5);
+    transition:transform 400ms cubic-bezier(.25,1,.5,1),box-shadow 400ms cubic-bezier(.25,1,.5,1)}
+  .gbtn::before{content:'';position:absolute;inset:-1px;border-radius:9999px;padding:1px;pointer-events:none;
+    background:conic-gradient(from -75deg at 50% 50%,rgba(241,234,217,.5) 0%,transparent 5% 40%,rgba(241,234,217,.5) 50%,transparent 60% 95%,rgba(241,234,217,.5) 100%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+    mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;transition:background 500ms ease}
+  .gbtn::after{display:none !important}
+  .gbtn:hover{transform:scale(.975)}
+  .gbtn:hover::before{background:conic-gradient(from -125deg at 50% 50%,rgba(241,234,217,.62) 0%,transparent 5% 40%,rgba(241,234,217,.62) 50%,transparent 60% 95%,rgba(241,234,217,.62) 100%)}
+  .gbtn:active{transform:scale(.965)}
+  .gbtn.wax{background:linear-gradient(-75deg,#B93A24,#8C2818);color:#F6EEDE}
+  .gbtn[disabled]{opacity:.4;pointer-events:none}
+  .ginput{position:relative;display:flex;align-items:center;gap:8px;width:100%;padding:5px;border-radius:9999px;
+    background:linear-gradient(-75deg,rgba(241,234,217,.05),rgba(241,234,217,.17),rgba(241,234,217,.05));
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    box-shadow:inset 0 2px 2px rgba(255,255,255,.06),inset 0 -2px 2px rgba(0,0,0,.45),0 4px 10px -2px rgba(0,0,0,.5);
+    transition:box-shadow 400ms cubic-bezier(.25,1,.5,1)}
+  .ginput::before{content:'';position:absolute;inset:-1px;border-radius:9999px;padding:1px;pointer-events:none;
+    background:conic-gradient(from -75deg at 50% 50%,rgba(241,234,217,.42) 0%,transparent 5% 40%,rgba(241,234,217,.42) 50%,transparent 60% 95%,rgba(241,234,217,.42) 100%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+    mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;transition:background 500ms ease}
+  .ginput:focus-within::before{background:conic-gradient(from -125deg at 50% 50%,rgba(232,120,94,.7) 0%,transparent 5% 40%,rgba(232,120,94,.7) 50%,transparent 60% 95%,rgba(232,120,94,.7) 100%)}
+  .ginput input{flex:1;min-width:0;border:none;background:transparent;color:#F1EAD9;font-family:var(--sans);font-size:15px;padding:9px 4px}
+  .ginput input:focus{outline:none}
+  .ginput input::placeholder{color:rgba(241,234,217,.5)}
+
+  /* --- gate background drift (quordix/sign-up refs) --- */
+  @keyframes float1{0%{transform:translate(0,0)}50%{transform:translate(-16px,16px)}100%{transform:translate(0,0)}}
+  @keyframes float2{0%{transform:translate(0,0)}50%{transform:translate(16px,-16px)}100%{transform:translate(0,0)}}
+  @keyframes gate-in{from{opacity:0}to{opacity:1}}
+  @keyframes step-in{from{opacity:0;transform:translateY(7px);filter:blur(6px)}to{opacity:1;transform:none;filter:blur(0)}}
+  @keyframes orbit{to{transform:rotate(360deg)}}
+
+  /* --- theme switcher --- */
+  #themesw button{position:relative;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:none;border-radius:9999px;background:transparent;color:rgba(241,234,217,.45);cursor:pointer;overflow:visible}
+  #themesw button::after{display:none}
+  #themesw button:hover{color:#F1EAD9}
+  #themesw button[data-on="1"]{color:#F1EAD9}
+  #themesw button[data-on="1"]::before{content:'';position:absolute;inset:0;border:1px solid rgba(241,234,217,.28);border-radius:9999px}
+
+  /* --- theme tokens (consumed by the dashboard's inline styles) --- */
+  #appwrap{
+    --fg:#F1EAD9;--fg2:#C9C0AC;--fg3:#B4AB99;--dim:#9A9080;--dim2:#8E8676;
+    --line:rgba(241,234,217,.13);--line2:rgba(241,234,217,.08);--track:rgba(241,234,217,.10);
+    --tint:rgba(241,234,217,.05);--tint2:rgba(241,234,217,.025);
+    --card:linear-gradient(145deg,rgba(30,22,18,.62),rgba(12,9,7,.76));
+    --tile:linear-gradient(145deg,rgba(34,24,19,.7),rgba(14,10,8,.8));
+    --shell:linear-gradient(160deg,rgba(14,11,8,.94),rgba(8,6,5,.97));
+    --wax:#E8785E;--pop:#7FD08A;--stamp:#0B0907;
+    --panel:linear-gradient(160deg,rgba(36,25,20,.96),rgba(11,8,6,.98));
+    --pill:linear-gradient(145deg,rgba(44,26,20,.9),rgba(22,13,10,.9));
+    color:var(--fg);
+  }
+  #appwrap[data-theme="light"]{
+    --fg:#16130E;--fg2:#4B463A;--fg3:#5F5847;--dim:#6B6353;--dim2:#6B6353;
+    --line:rgba(22,19,14,.17);--line2:rgba(22,19,14,.11);--track:rgba(22,19,14,.11);
+    --tint:rgba(22,19,14,.05);--tint2:rgba(22,19,14,.03);
+    --card:linear-gradient(145deg,#FCF8EF,#F8F2E4);
+    --tile:linear-gradient(145deg,#FBF6EA,#F5EEDF);
+    --shell:linear-gradient(160deg,#F6F1E4,#E9E0CC);
+    --wax:#A6321F;--pop:#3F8C4E;--stamp:#FCF8EF;
+    --panel:linear-gradient(160deg,#FCF8EF,#F2EAD8);
+    --pill:linear-gradient(145deg,#F2EAD8,#E7DDC7);
+  }
+  #appwrap[data-theme="light"] #themesw button{color:rgba(22,19,14,.42)}
+  #appwrap[data-theme="light"] #themesw button[data-on="1"]{color:#16130E}
+  #appwrap[data-theme="light"] #themesw button[data-on="1"]::before{border-color:rgba(22,19,14,.24)}
+
+  /* --- 4. toasts --- */
+  @keyframes tx-in{from{opacity:0;transform:translateX(26px) scale(.96)}to{opacity:1;transform:none}}
+  @keyframes tx-spin{to{transform:rotate(360deg)}}
+  @keyframes tx-bar{from{width:8%}to{width:100%}}
+  #appmain [data-sec] svg{transition:transform 160ms ease}
+  #appmain [data-sec][data-open="0"] svg{transform:rotate(180deg)}
+  #apprail{width:238px;flex:none;transition:width 320ms cubic-bezier(.16,1,.3,1)}
+  #apprail[data-wide="0"]{width:64px}
+  #apprail [data-lbl]{transition:opacity 200ms ease}
+  #apprail[data-wide="0"] [data-lbl]{opacity:0;pointer-events:none}
+  #apprail[data-wide="0"] [data-gchev],#apprail[data-wide="0"] [data-secbody] [data-badge]{opacity:0}
+  #apprail[data-wide="0"] a,#apprail[data-wide="0"] button{justify-content:flex-start}
+  #apprail [data-gchev] svg{transition:transform 160ms ease}
+  #apprail [data-open="0"] [data-gchev] svg,#apprail button[data-open="0"] svg{transform:rotate(-90deg)}
+  #apprail a[data-active="1"] svg{stroke:var(--wax)}
+  @media (max-width:1180px){
+    #appcols,#appcols2,#appcols3,#appcols4,#appcols5,#appcols6{grid-template-columns:1fr !important}
+  }
+  @media (max-width:1080px) and (min-width:600px){
+    #kpis{grid-template-columns:1fr 1fr !important}
+  }
+  @media (max-width:720px){
+    #appmain [data-critrow]{grid-template-columns:1fr !important;gap:8px !important}
+  }
+  @media (max-width:860px){
+    #appgrid{grid-template-columns:1fr !important}
+    #railtoggle{display:inline-flex !important}
+    #apprail{position:fixed;inset:0;z-index:70;width:100% !important;padding:74px 26px 26px !important;border-right:none !important;
+      background:linear-gradient(160deg,rgba(20,15,11,.98),rgba(9,7,5,.99));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+      transition:transform 300ms cubic-bezier(.4,0,.2,1),opacity 300ms ease}
+    #apprail[data-sheet="0"]{transform:translateX(-100%);opacity:0;pointer-events:none}
+    #apprail[data-sheet="1"]{transform:none;opacity:1}
+    #apprail [data-lbl]{opacity:1 !important}
+    #apprail a{font-size:17px !important;padding:13px 10px !important}
+    #railclose{display:inline-flex !important}
+  }
+
+  /* --- tablet --- */
+  @media (min-width:620px) and (max-width:790px),(min-width:620px) and (max-width:1100px) and (orientation:portrait){
+    #mtoggle{display:inline-flex !important}
+    #navwrap{position:absolute;top:66px;right:0;flex-direction:column;align-items:stretch;gap:18px;
+      width:min(324px,calc(100vw - 2*clamp(36px,4.04vw,96px)));padding:20px;
+      border:1px solid rgba(241,234,217,.15);border-radius:16px;
+      background:linear-gradient(145deg,rgba(30,22,18,.94),rgba(12,9,7,.96));
+      backdrop-filter:blur(18px) saturate(110%);-webkit-backdrop-filter:blur(18px) saturate(110%);
+      box-shadow:0 18px 44px rgba(0,0,0,.55)}
+    #navwrap[data-open="0"]{opacity:0;visibility:hidden;transform:translateY(-8px) scale(.985);pointer-events:none}
+    #navwrap[data-open="1"]{opacity:1;visibility:visible;transform:none;transition:opacity 180ms ease,transform 180ms ease}
+    #navlinks{flex-direction:column;gap:16px !important;top:0 !important}
+    #tpanel{margin-left:0 !important;width:auto !important;height:auto !important;padding:10px 0 10px 10px !important}
+    #signup{margin-left:0 !important;width:100% !important}
+    #card{width:clamp(150px,17vh,190px) !important}
+  }
+  /* --- mobile --- */
+  @media (max-width:619px){
+    #mtoggle{display:inline-flex !important}
+    #navwrap{position:absolute;top:66px;right:0;flex-direction:column;align-items:stretch;gap:18px;
+      width:min(340px,calc(100vw - 40px));padding:20px;
+      border:1px solid rgba(241,234,217,.15);border-radius:16px;
+      background:linear-gradient(145deg,rgba(30,22,18,.94),rgba(12,9,7,.96));
+      backdrop-filter:blur(18px) saturate(110%);-webkit-backdrop-filter:blur(18px) saturate(110%);
+      box-shadow:0 18px 44px rgba(0,0,0,.55)}
+    #navwrap[data-open="0"]{opacity:0;visibility:hidden;transform:translateY(-8px) scale(.985);pointer-events:none}
+    #navwrap[data-open="1"]{opacity:1;visibility:visible;transform:none;transition:opacity 180ms ease,transform 180ms ease}
+    #navlinks{flex-direction:column;gap:16px !important;top:0 !important}
+    #tpanel{margin-left:0 !important;width:auto !important;height:auto !important;padding:10px 0 10px 10px !important}
+    #signup{margin-left:0 !important;width:100% !important}
+    #hdr{top:14px !important;width:calc(100vw - 32px) !important;height:56px !important;padding:0 8px 0 16px !important}
+    #hero{left:20px !important;bottom:max(24px,env(safe-area-inset-bottom)) !important;right:20px}
+    #l1{transform:scaleX(.78) !important}
+    #l2{transform:scaleX(.55) !important}
+    #copy br{display:none}
+    #copy{width:min(100%,420px) !important}
+    #card{right:20px !important;bottom:auto !important;top:clamp(176px,32svh,300px) !important;width:clamp(140px,34vw,172px) !important}
+  }
+  @media (max-height:520px) and (orientation:landscape){
+    #card{width:clamp(120px,15vh,150px) !important}
+  }

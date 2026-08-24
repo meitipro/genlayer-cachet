@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    // ES2020 or later, because every amount in this app is a BigInt. Wei
+    // amounts run past Number.MAX_SAFE_INTEGER - a 40,000 GEN budget is 4e22 -
+    // so parsing one as a number loses the low digits silently, on the number
+    // printed on the award screen.
+    "target": "ES2020",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    // `node --test lib/format.test.ts` strips the types itself and therefore
+    // resolves imports exactly as written, so the test file has to spell the
+    // ".ts" extension. Safe here only because "noEmit" is on: nothing this
+    // compiler sees is ever written out with that specifier baked in.
+    "allowImportingTsExtensions": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", "scripts"]
+}

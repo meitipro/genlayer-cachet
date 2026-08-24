@@ -2,7 +2,10 @@
  * Cachet - the cinematic shell.
  *
  * Ported from the "Cachet Cinematic" design handoff, not rebuilt by eye: the
- * block below is the handoff's own stylesheet with two changes, and only two.
+ * block below is the handoff's own stylesheet, with the six changes listed
+ * here and nothing else. Four are consequences of the handoff being a single
+ * page while this is a site; two are bugs in the source that only show up for
+ * a reader using reduced motion or a keyboard.
  *
  *   1. The two Google font families are replaced with --sans / --mono, which
  *      resolve to the self-hosted faces declared in app/layout.tsx. next/font
@@ -23,7 +26,14 @@
  *      meant the light theme flipped all the tokens and left the page itself
  *      black with pale text: a light card on a black body. A ported sheet has
  *      to sit inside the theme system, not on top of it.
- *   4. The overflow lock on html and body is scoped to the cinematic route
+ *   4. The reduced-motion block no longer sets `transform:none` on every
+ *      element. This design positions with transforms, so that one
+ *      declaration put the header off the right edge of the screen for any
+ *      reader who asked for less motion. See the rule for the detail.
+ *   5. The collapsed mobile rail is marked `inert` by AppShell. The handoff
+ *      hides it with `pointer-events:none`, which stops the mouse and not the
+ *      keyboard, so the closed menu kept eight links in the tab order.
+ *   6. The overflow lock on html and body is scoped to the cinematic route
  *      only, through a .cine class on the root element. Applied globally it
  *      would trap every long page - the docs, the docket - at one viewport
  *      height with no way to scroll.
@@ -49,7 +59,25 @@
   @keyframes en-copy{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
   @keyframes en-card{from{opacity:0;transform:translateY(12px) scale(.968)}to{opacity:1;transform:none}}
   @keyframes en-app{from{opacity:0;transform:translateY(14px) scale(.99)}to{opacity:1;transform:none}}
-  @media (prefers-reduced-motion:reduce){*{animation:none !important;opacity:1 !important;transform:none !important}}
+  /*
+   * Reduced motion suppresses the ANIMATION, not the layout.
+   *
+   * The handoff's rule here was `*{animation:none;opacity:1;transform:none}`.
+   * The last of those is the problem: this design positions with transforms.
+   * The header is `left:50%` plus `translateX(-50%)`, and the hero lines are
+   * compressed with `scaleX()` to fit the viewport. Removing every transform
+   * put the header entirely off the right edge of a 375px screen and pushed
+   * the hero text past it - so the one reader who asked for less motion got
+   * the only broken layout on the site.
+   *
+   * Running the animations at an imperceptible duration instead lands every
+   * element on its final frame immediately, which is what `animation:none`
+   * was reaching for, without touching anything positional. This matches the
+   * block already in globals.css.
+   */
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+  }
   #appmain{overflow-x:hidden}
   #appmain::-webkit-scrollbar{width:9px}
   #appmain::-webkit-scrollbar-track{background:var(--tint2)}
@@ -195,6 +223,10 @@
     #apprail{position:fixed;inset:0;z-index:70;width:100% !important;padding:74px 26px 26px !important;border-right:none !important;
       background:linear-gradient(160deg,rgba(20,15,11,.98),rgba(9,7,5,.99));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
       transition:transform 300ms cubic-bezier(.4,0,.2,1),opacity 300ms ease}
+    /* Off-screen and unclickable. Keeping it out of the TAB ORDER is done with
+       the `inert` attribute from AppShell instead of with visibility here:
+       `pointer-events:none` stops only the mouse, and a visibility transition
+       on a discrete property did not reliably flip back on close. */
     #apprail[data-sheet="0"]{transform:translateX(-100%);opacity:0;pointer-events:none}
     #apprail[data-sheet="1"]{transform:none;opacity:1}
     #apprail [data-lbl]{opacity:1 !important}

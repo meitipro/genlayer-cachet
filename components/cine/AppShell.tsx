@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Mark } from "./Mark";
 import { useWallet } from "@/components/wallet";
@@ -52,6 +52,46 @@ export default function AppShell({
   });
   const [wide, setWide] = useState(true);
   const [sheet, setSheet] = useState(false);
+  const railRef = useRef<HTMLElement>(null);
+
+  /*
+   * Is the rail currently a drawer, rather than permanent navigation?
+   *
+   * Listening only to the media query's `change` event is not enough: it does
+   * not fire reliably for every way a viewport can change size, and a missed
+   * event here leaves the desktop rail marked inert - unreachable permanent
+   * navigation, which is a worse bug than the one being fixed. `resize` always
+   * fires, so both feed the same setter and React drops the duplicate updates.
+   */
+  const [drawer, setDrawer] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width:860px)");
+    const sync = () => setDrawer(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    window.addEventListener("resize", sync);
+    return () => {
+      mq.removeEventListener("change", sync);
+      window.removeEventListener("resize", sync);
+    };
+  }, []);
+
+  /*
+   * Keep the CLOSED drawer out of the tab order.
+   *
+   * Below 860px the rail is a full-screen drawer parked off the left edge with
+   * `opacity:0; pointer-events:none`. Neither of those removes anything from
+   * the tab order, so a keyboard user reached eight invisible links before the
+   * page itself. `inert` takes the whole subtree out of both the tab order and
+   * the accessibility tree, and is set imperatively because React 18 does not
+   * recognise the attribute.
+   */
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    if (drawer && !sheet) rail.setAttribute("inert", "");
+    else rail.removeAttribute("inert");
+  }, [drawer, sheet]);
 
   // The chosen theme is written to the root element, where globals.css picks
   // it up, so every page inside the shell changes with it rather than only the
@@ -165,6 +205,7 @@ export default function AppShell({
 
       <div id="appgrid" style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "auto 1fr" }}>
         <nav
+          ref={railRef}
           id="apprail"
           aria-label="Sections"
           data-wide={wide ? "1" : "0"}

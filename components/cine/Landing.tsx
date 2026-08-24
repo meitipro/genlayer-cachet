@@ -17,15 +17,23 @@ import { Mark } from "./Mark";
  */
 export default function Landing({
   network,
-  live,
+  configured,
   openRounds,
   menu,
   setMenu,
   onLaunch,
 }: {
   network: string;
-  /** False when no contract is configured, or the read failed. */
-  live: boolean;
+  /**
+   * Whether an address is set for this network at all.
+   *
+   * Kept separate from whether the read landed. A single `live` flag folded the
+   * two together, and the fold ran the wrong way: a configured contract behind a
+   * rate limit rendered as "No contract configured", which is a claim about the
+   * deployment rather than about the last second - and it made the "could not
+   * read" line below unreachable, since a failed read always cleared the flag.
+   */
+  configured: boolean;
   /** Rounds currently taking bids, or null when that could not be read. */
   openRounds: number | null;
   menu: boolean;
@@ -34,7 +42,7 @@ export default function Landing({
 }) {
   const closeMenu = () => setMenu(false);
 
-  const networkLine = !live
+  const networkLine = !configured
     ? "No contract configured"
     : openRounds === null
       ? "Could not read the chain"

@@ -209,17 +209,20 @@
  * lands lighter than its surroundings.
  */
 /*
- * No attribute means "follow the system", and it has to actually do that: the
- * switcher offers System / Light / Dark, and the first of those was a label on
- * a button that always produced dark. A boot script in the layout writes an
- * explicit attribute before first paint, so this branch is only ever reached
- * by a reader who chose System.
+ * There is no media query here on purpose.
+ *
+ * "System" is resolved to an explicit light or dark BEFORE first paint, by the
+ * boot script in app/layout.tsx, and re-resolved when the OS preference
+ * changes while System is selected. So this stylesheet only ever has to know
+ * about two states, and the dark palette above exists exactly once.
+ *
+ * The alternative - repeating the whole token block inside
+ * `@media (prefers-color-scheme: dark)` - is where this went wrong before: a
+ * media query cannot be added to a selector list, so the block has to be
+ * duplicated, and the first attempt duplicated only `color-scheme: dark` and
+ * none of the tokens. "System" on a dark machine then produced the LIGHT
+ * palette, which is worse than the bug it was meant to fix.
  */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    color-scheme: dark;
-  }
-}
 
 :root[data-theme="dark"] .on-ink {
   background: var(--paper-2);
@@ -1685,6 +1688,23 @@ canvas {
 .banner-inner b {
   color: var(--ink);
   font-weight: 600;
+}
+
+/* The reveal-window banner. It used to carry `background:#f7e6e0` inline, which
+   is a light-theme value: under the dark theme the band went pale pink while the
+   text stayed light, and the sentence telling a bidder their reveal window is
+   open was the one that vanished. Both halves are tokens now, so the pair moves
+   together. */
+.banner-warn {
+  background: var(--warn-bg);
+  border-bottom-color: var(--warn-border);
+}
+.banner-warn .banner-inner {
+  color: var(--warn-fg);
+}
+.banner-warn .banner-inner strong,
+.banner-warn .banner-inner b {
+  color: var(--warn-strong);
 }
 
 /* A window shutting under the reader is the one banner that has to interrupt,

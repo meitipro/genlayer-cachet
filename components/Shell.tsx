@@ -84,7 +84,7 @@ export function Footer() {
             </div>
             <ul>
               <li>
-                <Link href="/docs#cannot">What it cannot do</Link>
+                <Link href="/docs#cannot">Where the score stops</Link>
               </li>
               <li>
                 <Link href="/docs#appeal">The appeal path</Link>
@@ -96,7 +96,7 @@ export function Footer() {
                 <Link href="/docs#scoring">How scoring agrees</Link>
               </li>
               <li>
-                <Link href="/docs#studio">What Studio does not prove</Link>
+                <Link href="/docs#studio">What Studio establishes</Link>
               </li>
             </ul>
           </div>

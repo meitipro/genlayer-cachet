@@ -81,6 +81,16 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
   const [roundId, setRoundId] = useState<number | null>(null);
+  /**
+   * The write landed. Separate from knowing WHICH round it made.
+   *
+   * The id comes from a second read, and that read can be rate limited even
+   * though the publish succeeded. Driving the success panel off the id alone
+   * meant a busy RPC turned a completed, escrowed publish into a failure
+   * message - and the one thing a buyer must not do after that message is
+   * publish again.
+   */
+  const [published, setPublished] = useState(false);
 
   const texts = useMemo(
     () => criteria.map((c) => c.text.split(/\s+/).filter(Boolean).join(" ").trim()).filter(Boolean),
@@ -277,29 +287,43 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
         return;
       }
 
-      // Find OUR round rather than assuming it is the last one: another buyer
-      // publishing between the write and this read would otherwise send us to
-      // their tender.
-      const digest = await criteriaDigest(texts);
-      const page = JSON.parse(
-        String(
-          await client.readContract({
-            address: CONTRACT,
-            functionName: "rounds_page",
-            args: [0, 12] as never[],
-          }),
-        ),
-      );
-      const mine = (page.rounds ?? []).find(
-        (r: { buyer: string; criteria_hash: string; title: string; id: number }) =>
-          r.buyer?.toLowerCase() === address.toLowerCase() &&
-          r.criteria_hash === digest &&
-          r.title === title.trim(),
-      );
-      setRoundId(typeof mine?.id === "number" ? mine.id : (page.total ?? 1) - 1);
+      // Past this point the publish has SUCCEEDED. Everything below is only
+      // about naming the round it created, and none of it may turn the outcome
+      // back into a failure.
+      setPublished(true);
       setMessage(
         "Published, and the budget is escrowed. From this moment the criteria and weights cannot change - there is no method in the contract that edits them.",
       );
+
+      try {
+        // Find OUR round rather than assuming it is the last one: another buyer
+        // publishing between the write and this read would otherwise send us to
+        // their tender. `rounds_page` is newest first, so one page covers it.
+        const digest = await criteriaDigest(texts);
+        const page = JSON.parse(
+          String(
+            await client.readContract({
+              address: CONTRACT,
+              functionName: "rounds_page",
+              args: [0, 12] as never[],
+            }),
+          ),
+        );
+        const mine = (page.rounds ?? []).find(
+          (r: { buyer: string; criteria_hash: string; title: string; id: number }) =>
+            r.buyer?.toLowerCase() === address.toLowerCase() &&
+            r.criteria_hash === digest &&
+            r.title === title.trim(),
+        );
+        // No guess. `total - 1` was the fallback here, and it is right only
+        // while nobody else publishes and the read actually landed - the two
+        // cases where the fallback is needed are exactly the two where it is
+        // wrong. Sending a buyer to another buyer's tender, labelled as theirs,
+        // is worse than sending them to the docket to find their own.
+        if (typeof mine?.id === "number") setRoundId(mine.id);
+      } catch {
+        // Deliberately swallowed: the round exists either way.
+      }
     } catch (e) {
       setFailed(true);
       setMessage(readableError(e));
@@ -331,20 +355,33 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
     );
   }
 
-  if (roundId !== null) {
+  if (published) {
     return (
       <div className="panel">
         <div className="panel-head">
           <span className="label">Published</span>
-          <span className="label">round {roundId}</span>
+          <span className="label">{roundId !== null ? `round ${roundId}` : "on chain"}</span>
         </div>
         <div className="panel-body">
           <p style={{ fontSize: 15, lineHeight: 1.6, color: "var(--body)", marginBottom: 18 }}>
             {message}
           </p>
-          <a className="btn btn-primary" href={`/r/${roundId}`}>
-            Open round {roundId}
-          </a>
+          {roundId !== null ? (
+            <a className="btn btn-primary" href={`/r/${roundId}`}>
+              Open round {roundId}
+            </a>
+          ) : (
+            <>
+              <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--muted)", marginBottom: 18 }}>
+                Which round number it took could not be read back just now. The round is
+                published either way - it is at the top of the docket, under your address.
+                Do not publish again.
+              </p>
+              <a className="btn btn-primary" href="/rounds">
+                Open the docket
+              </a>
+            </>
+          )}
         </div>
       </div>
     );

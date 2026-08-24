@@ -50,7 +50,12 @@ export default async function RoundPage({ params }: Props) {
   if (result.state === "absent") notFound();
   if (result.state === "unavailable") return <RoundUnavailable id={id} />;
 
-  const { round, bids } = result.value;
+  const { round } = result.value;
+  // NULL means the bids read did not land. Everything below that counts, sorts
+  // or reports on bids has to say so rather than treat it as an empty round.
+  const bids = result.value.bids;
+  const bidsUnread = bids === null;
+  const rows = bids ?? [];
   const now = Date.now();
   const phase = phaseOf(round, now);
   // Read only when there is something to read, or when the window is still
@@ -58,10 +63,10 @@ export default async function RoundPage({ params }: Props) {
   // spend a request out of thirty a minute to confirm that.
   const questions =
     round.questions > 0 || phase === "commit" ? await getQuestions(round.id) : [];
-  const ranked = scoredBids(bids);
+  const ranked = scoredBids(rows);
   const winner = ranked[0] ?? null;
-  const unscored = bids.filter((b) => b.status === "revealed");
-  const appeals = bids.filter((b) => b.appeal_status === "open");
+  const unscored = rows.filter((b) => b.status === "revealed");
+  const appeals = rows.filter((b) => b.appeal_status === "open");
 
   // The instants still ahead of this render. If the reader's clock crosses one
   // of them, the phase, the timeline and the button above are all describing a
@@ -312,7 +317,16 @@ export default async function RoundPage({ params }: Props) {
               though nothing had. */}
           {phase === "commit" ? (
             <SealedNotice round={round} now={now} />
-          ) : bids.length === 0 ? (
+          ) : bidsUnread ? (
+            <div className="empty">
+              <p>
+                The bids on this round could not be read, so this is not a claim that there were
+                none - the round itself reports {round.bids} bid{round.bids === 1 ? "" : "s"}.
+                <br />
+                <Link href={`/r/${round.id}`}>Try again.</Link>
+              </p>
+            </div>
+          ) : rows.length === 0 ? (
             <div className="empty">
               <p>No bid was ever sealed on this round.</p>
             </div>
@@ -330,7 +344,7 @@ export default async function RoundPage({ params }: Props) {
               {unscored.map((b) => (
                 <PendingBlock key={b.i} bid={b} />
               ))}
-              {bids
+              {rows
                 .filter((b) => b.status === "expired")
                 .map((b) => (
                   <ExpiredBlock key={b.i} bid={b} />
@@ -338,7 +352,7 @@ export default async function RoundPage({ params }: Props) {
               {/* A commitment nobody opened, after the window shut. It still
                   reads as sealed because expiry is a real state change with a
                   moment attached and nobody has paid for it yet. */}
-              {bids
+              {rows
                 .filter((b) => b.status === "sealed")
                 .map((b) => (
                   <SealedBlock key={b.i} bid={b} />
@@ -347,7 +361,7 @@ export default async function RoundPage({ params }: Props) {
                   happened in this round, and a docket that silently dropped
                   the rows it found inconvenient would be the wrong kind of
                   record. */}
-              {bids
+              {rows
                 .filter((b) => b.status === "withdrawn")
                 .map((b) => (
                   <WithdrawnBlock key={b.i} bid={b} />
@@ -566,7 +580,7 @@ function StateNotice({
 
 function Notice({ children, warn }: { children: React.ReactNode; warn?: boolean }) {
   return (
-    <div className={warn ? "banner" : "banner"} style={warn ? { background: "#f7e6e0" } : undefined}>
+    <div className={warn ? "banner banner-warn" : "banner"}>
       <div className="banner-inner" style={{ letterSpacing: 0, fontFamily: "var(--sans)", fontSize: 13.5 }}>
         <span>{children}</span>
       </div>

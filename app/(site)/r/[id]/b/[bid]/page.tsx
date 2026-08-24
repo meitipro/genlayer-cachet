@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 
 import { Scorecard } from "@/components/Round";
 import { NotConfigured, Unreachable } from "@/components/Shell";
-import { CONFIGURED, readRound } from "@/lib/cachet";
+import { CONFIGURED, getBid, readRound } from "@/lib/cachet";
 import { explorerAddress, HAS_EXPLORER } from "@/lib/chain";
 import { formatDate, formatGen, maxTotal, scoredBids, shortAddress } from "@/lib/format";
 
@@ -69,10 +69,26 @@ export default async function BidPage({ params }: Props) {
   if (result.state === "absent") notFound();
   if (result.state === "unavailable") return <BidUnavailable id={id} />;
 
-  const bid = result.value.bids.find((b) => b.i === index);
+  // The round read landed but the BIDS read did not. We therefore do not know
+  // whether this bid exists, and 404 would be the same false claim the guard
+  // above refuses to make about the round.
+  if (result.value.bids === null) return <BidUnavailable id={id} />;
+
+  const listed = result.value.bids.find((b) => b.i === index);
+  // The list truncates proposals at 400 characters; this view carries the whole
+  // text. Only worth the extra request once there is something revealed to
+  // read, and the page still renders off the listed copy if it does not land.
+  const full = listed && listed.proposal ? await getBid(id, index) : null;
+  const bid = full ?? listed;
+  // True when we are showing the 400-character copy under a heading that gives
+  // the full length. The heading has to say so rather than let the reader
+  // assume the text ended where it stopped.
+  const truncated =
+    bid !== undefined && full === null && bid.proposal.length < bid.proposal_length;
   if (!bid) notFound();
 
-  const { round, bids } = result.value;
+  const { round } = result.value;
+  const bids = result.value.bids;
   const ranked = scoredBids(bids);
   const winner = ranked[0] ?? null;
   const isWinner = winner?.i === bid.i;
@@ -201,7 +217,9 @@ export default async function BidPage({ params }: Props) {
           <div className="eyebrow-row">
             <div className="eyebrow">The proposal, as revealed</div>
             <div className="eyebrow-note">
-              {bid.proposal_length.toLocaleString("en-US")} characters
+              {truncated
+                ? `first ${bid.proposal.length.toLocaleString("en-US")} of ${bid.proposal_length.toLocaleString("en-US")} characters`
+                : `${bid.proposal_length.toLocaleString("en-US")} characters`}
             </div>
           </div>
           {bid.proposal ? (
@@ -220,6 +238,13 @@ export default async function BidPage({ params }: Props) {
               >
                 {bid.proposal}
               </pre>
+              {truncated ? (
+                <div className="note note-warn" style={{ margin: "0 24px 22px" }}>
+                  The rest of this proposal could not be read just now, so the text above stops
+                  short of the end. Reload to read it in full - nothing about the bid has
+                  changed.
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="empty">

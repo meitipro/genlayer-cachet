@@ -36,20 +36,33 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
   const { address, connect, busy } = useWallet();
-  // Read synchronously in the initial state, not in an effect: the boot script
-  // in the layout has already painted from this same value, and setting it a
-  // frame later would write "dark" over a reader's "system" and then take it
-  // back again.
-  const [theme, setTheme] = useState<"system" | "light" | "dark">(() => {
-    if (typeof window === "undefined") return "dark";
+  /*
+   * The same first frame on the server and on the client, deliberately.
+   *
+   * Reading localStorage in the initial state looks like the tidy fix for the
+   * flash, and it is a hydration mismatch: the server has no storage and
+   * renders "dark", the client reads "light" and renders that, and React does
+   * not repair the attributes it has already shipped. The switcher then
+   * highlighted Dark on a light page, and clicking Light was a NO-OP, because
+   * the state already said "light" and React bailed out of the render. The
+   * only escape was to pick dark and then light again.
+   *
+   * The visual flash it was guarding against does not exist anyway: the boot
+   * script in the layout has already painted the right palette. Only this
+   * indicator lags, by one frame, and syncing it in an effect is correct.
+   */
+  const [theme, setTheme] = useState<"system" | "light" | "dark">("dark");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
     try {
       const saved = window.localStorage.getItem("cachet:theme");
-      if (saved === "light" || saved === "dark" || saved === "system") return saved;
+      if (saved === "light" || saved === "dark" || saved === "system") setTheme(saved);
     } catch {
-      /* storage blocked; fall through to the default */
+      /* storage blocked; the default stands */
     }
-    return "dark";
-  });
+  }, []);
   const [wide, setWide] = useState(true);
   const [sheet, setSheet] = useState(false);
   const railRef = useRef<HTMLElement>(null);
@@ -93,19 +106,33 @@ export default function AppShell({
     else rail.removeAttribute("inert");
   }, [drawer, sheet]);
 
-  // The chosen theme is written to the root element, where globals.css picks
-  // it up, so every page inside the shell changes with it rather than only the
-  // chrome around them.
+  /*
+   * Write the RESOLVED palette to the root, where globals.css reads it, and
+   * keep following the OS for as long as System is the choice.
+   *
+   * The attribute is never removed: globals.css defines light and dark only,
+   * so an absent attribute would silently mean light. The user's choice and
+   * the resolved palette are two different things, and only the first is
+   * stored.
+   */
   useEffect(() => {
+    if (!mounted) return;
     const root = document.documentElement;
-    if (theme === "system") root.removeAttribute("data-theme");
-    else root.setAttribute("data-theme", theme);
+    const prefersLight = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => {
+      const resolved = theme === "system" ? (prefersLight.matches ? "light" : "dark") : theme;
+      root.setAttribute("data-theme", resolved);
+    };
+    apply();
     try {
       window.localStorage.setItem("cachet:theme", theme);
     } catch {
       /* storage blocked; the choice simply does not persist */
     }
-  }, [theme]);
+    if (theme !== "system") return;
+    prefersLight.addEventListener("change", apply);
+    return () => prefersLight.removeEventListener("change", apply);
+  }, [theme, mounted]);
 
   // A route change closes the mobile sheet. Without this the rail stays over
   // the page you just navigated to, which reads as a broken link.
@@ -159,9 +186,9 @@ export default function AppShell({
               key={value}
               type="button"
               role="radio"
-              aria-checked={theme === value}
+              aria-checked={mounted && theme === value}
               aria-label={label}
-              data-on={theme === value ? "1" : "0"}
+              data-on={mounted && theme === value ? "1" : "0"}
               onClick={() => setTheme(value)}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">

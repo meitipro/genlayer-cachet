@@ -31,8 +31,8 @@ export default async function Home() {
   return (
     <Cinematic
       network={NETWORK_LABEL}
-      live={CONFIGURED && page !== null}
-      openRounds={CONFIGURED ? openRounds : null}
+      configured={CONFIGURED}
+      openRounds={openRounds}
     />
   );
 }

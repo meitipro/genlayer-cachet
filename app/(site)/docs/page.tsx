@@ -9,17 +9,17 @@ import { formatGen } from "@/lib/format";
 export const revalidate = 300;
 
 export const metadata: Metadata = {
-  title: "How it works, and what it cannot do",
+  title: "How it works",
   description:
-    "The scoring rule, the appeal path, the honest limits, and what a gasless test network does not prove.",
+    "The scoring rule, the appeal path, where the score stops, and what a gasless test network establishes.",
 };
 
 const SECTIONS = [
   ["scoring", "How scoring reaches agreement"],
   ["appeal", "The appeal path"],
-  ["cannot", "What this cannot do"],
+  ["cannot", "Where the score stops"],
   ["failures", "Every way a round can fail"],
-  ["studio", "What Studio does not prove"],
+  ["studio", "What Studio establishes"],
   ["contract", "The contract surface"],
 ];
 
@@ -53,8 +53,8 @@ export default async function DocsPage() {
             }}
           >
             A tender that cannot be argued with is not a tender, it is an announcement. This page
-            is the scoring rule, the appeal path, and the things this product genuinely cannot do
-            - written down before anyone bids rather than after they lose.
+            is the scoring rule, the appeal path, and exactly where the score stops and your own
+            judgement starts - written down before anyone bids rather than after they lose.
           </p>
           <nav className="row" aria-label="On this page">
             {SECTIONS.map(([id, label]) => (
@@ -238,34 +238,34 @@ export default async function DocsPage() {
       <section id="cannot" className="section-tight on-band">
         <div className="shell">
           <div className="eyebrow-row">
-            <div className="eyebrow">What this cannot do</div>
+            <div className="eyebrow">Where the score stops</div>
             <div className="eyebrow-note">read before you escrow anything</div>
           </div>
           <div className="grid grid-auto-290">
             {[
               [
-                "It cannot evaluate capability",
-                "It scores prose. A well written proposal from a weak supplier will beat a badly written one from a strong supplier. Criteria that demand verifiable references blunt this as far as anything can, and that is the whole of the mitigation.",
+                "The score measures the proposal, not the supplier",
+                "What is graded is the submitted text, against your criteria. So a well written proposal from a weak supplier will outscore a badly written one from a strong supplier. Criteria demanding verifiable, named references pull the score back towards evidence, and that is the lever you have.",
               ],
               [
-                "It cannot check whether a claim is true",
-                "No page is fetched during a round. If a bidder names three references, the network scores the fact that three references were named - not whether they exist. Verification is yours, before you award.",
+                "A claim is scored as a claim",
+                "No page is fetched during a round, by design: a scoring pass that reached out to the web would give every validator a different document and agreement would never settle. If a bidder names three references, the network scores that three were named. Checking them is your step, before you award.",
               ],
               [
-                "It cannot stop collusion between bidders",
-                "Sealed commitments make coordination harder, not impossible. Bidders who agree in advance can still agree in advance, and this product will score their proposals faithfully.",
+                "Sealing raises the price of coordination",
+                "Each commitment is a hash bound to its own bidder's address, so nobody can see a rival's number before the window closes, and nobody can submit under another's name. Bidders determined to agree in advance still can, and their proposals are scored exactly as faithfully as everyone else's.",
               ],
               [
-                "It cannot undo a published mistake",
-                "There is no method that edits criteria or weights, and no owner override. That is the guarantee - and it means a typo in a criterion is published with it. Decline the round and republish.",
+                "Published criteria are final, on purpose",
+                "There is no method that edits criteria or weights, and no owner override - that immutability is the guarantee the whole product rests on. It applies to typos too. The remedy is to decline the round, which returns every deposit and the budget, and publish the corrected standard.",
               ],
               [
-                "It cannot tell you how many validators agreed",
-                "A contract cannot see its own vote counts. Screens here say a result was agreed, never 'five of five', because that number is not available to the code that would have to print it.",
+                "A result is reported as agreed, never counted",
+                "Validators re-run the scoring independently and the network settles on the answer they agree about. A contract cannot read its own vote tally, so these screens say a result was agreed rather than 'five of five' - a number no code here is in a position to print.",
               ],
               [
-                "It is not a court",
-                "GenLayer supports an agreed settlement workflow. It does not make a result legally binding and it does not replace a judge. The agreements, the jurisdiction and the escalation path around this contract are still yours.",
+                "The settlement path around this is yours",
+                "GenLayer supports an agreed settlement workflow, and this contract gives you a record every party can check line by line. Turning that record into a binding obligation is contract law, not consensus: the agreements, the jurisdiction and the escalation path stay where they were.",
               ],
             ].map(([title, body]) => (
               <div key={title} className="step">
@@ -374,14 +374,16 @@ export default async function DocsPage() {
       <section id="studio" className="section-tight on-band">
         <div className="shell">
           <div className="eyebrow-row">
-            <div className="eyebrow">What Studio does not prove</div>
+            <div className="eyebrow">What Studio establishes</div>
             <div className="eyebrow-note">{NETWORK_LABEL}</div>
           </div>
           <div className="prose" style={{ maxWidth: "72ch" }}>
             <p>
               A full round with several bidders runs on Studio end to end: commit and reveal,
-              escrow, scoring, appeal and award. What it cannot tell you is the number that
-              matters most before opening a large tender.
+              escrow, scoring, appeal and award. Every rule on this page is exercised there
+              against real transactions. What Studio does not settle is money. Read the list
+              below before taking a balance off this network: every item on it is a property of
+              the test network rather than of the contract, and each one says which.
             </p>
             <ul>
               <li>

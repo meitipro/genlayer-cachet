@@ -165,7 +165,14 @@ export interface BuyerRecord {
 /** Everything a round page needs, read together so the two cannot disagree. */
 export interface RoundView {
   round: Round;
-  bids: Bid[];
+  /**
+   * NULL means the bids could not be read, and is not the same as an empty
+   * array. Collapsing the two is the one mistake this codebase exists to
+   * avoid: it turns "we could not ask" into "there were none", which on a
+   * round page reads as a tender nobody bid on, and on a bid page as a bid
+   * that does not exist.
+   */
+  bids: Bid[] | null;
 }
 
 /**

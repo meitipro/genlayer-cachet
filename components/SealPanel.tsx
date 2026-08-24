@@ -82,7 +82,8 @@ export default function SealPanel({
   maxLength,
 }: {
   round: Round;
-  bids: Bid[];
+  /** NULL when the bids read failed: not the same as nobody having bid. */
+  bids: Bid[] | null;
   phase: "commit" | "reveal" | "decide" | "settled";
   minLength: number;
   maxLength: number;
@@ -106,6 +107,7 @@ export default function SealPanel({
    */
   const mine = useMemo(() => {
     if (!address) return undefined;
+    if (bids === null) return undefined;
     const ours = bids.filter((b) => b.bidder.toLowerCase() === address.toLowerCase());
     // A bidder who withdrew and came back has two rows here. The live one is
     // the one every button on this panel is about; matching the withdrawn row
@@ -115,6 +117,17 @@ export default function SealPanel({
 
   /** Their bid, only while it is still sealed - what `amend` and `withdraw` act on. */
   const sealedMine = mine && mine.status === "sealed" ? mine : undefined;
+  /**
+   * We could not read the bids at all.
+   *
+   * Distinct from "this address has not bid", and the difference decides what
+   * this panel may say. With the list unread, a bidder who HAS a sealed
+   * commitment would otherwise be told they have none and shown a disabled
+   * reveal button, while during the commit window the seal button would still
+   * be live - inviting a second entry deposit on a round they already entered.
+   * So neither action is offered until the list is known.
+   */
+  const bidsUnread = bids === null;
 
   /**
    * The salt: made here during a commit, recovered during a reveal.
@@ -470,9 +483,18 @@ export default function SealPanel({
                 </div>
               </div>
             ) : null}
+            {bidsUnread ? (
+              <div className="note note-warn" style={{ marginBottom: 16 }}>
+                <strong>The bids on this round could not be read.</strong> Sealing is disabled
+                until they can be: if this address has already committed, a second commit would
+                be refused after taking another entry deposit. Reload in a moment.
+              </div>
+            ) : null}
             <button
               className="btn btn-primary"
-              disabled={!ready || Boolean(sealedMine) || state === "signing" || state === "sent"}
+              disabled={
+                !ready || bidsUnread || Boolean(sealedMine) || state === "signing" || state === "sent"
+              }
               onClick={() => send("commit")}
             >
               {state === "signing"
@@ -499,7 +521,13 @@ export default function SealPanel({
               window is open. Reveals are only possible after the commit window closes, so no
               later bidder can price against an opened proposal.
             </p>
-            {address && !mine ? (
+            {bidsUnread ? (
+              <div className="note note-warn" style={{ marginBottom: 16 }}>
+                <strong>The bids on this round could not be read.</strong> This is not a claim that
+                you have no sealed bid - the list simply did not come back. Reload before
+                concluding anything, and do not assume the window has closed.
+              </div>
+            ) : address && !mine ? (
               <div className="note note-warn" style={{ marginBottom: 16 }}>
                 <strong>This address has no sealed bid on this round.</strong> Reveals can only be
                 made by the address that committed - the address is inside the commitment hash.

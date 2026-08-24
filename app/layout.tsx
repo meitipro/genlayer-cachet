@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 
+import ThemeSync from "@/components/ThemeSync";
 import Cursor from "@/components/cine/Cursor";
 import { ORIGIN } from "@/lib/chain";
 
@@ -78,19 +79,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         {/*
-          The theme, decided BEFORE first paint.
-          Set from React instead and the server markup carries no attribute, so
-          a reader who chose light gets a frame of the dark palette before the
-          effect runs. This runs synchronously in <head>, ahead of any paint,
-          and defaults to dark because that is what the design is. Reading
-          localStorage can throw outright when site data is blocked, hence the
-          try - an unhandled error here would block the document.
+          The theme, RESOLVED before first paint.
+          "System" is turned into an explicit light or dark here rather than
+          being left as an absent attribute for a media query to handle. That
+          keeps the dark palette defined exactly once in globals.css: a media
+          query cannot join a selector list, so the alternative is duplicating
+          the whole token block, and a partial duplicate is what made "System"
+          on a dark machine render light.
+          Running in <head> also means a reader who chose light never sees a
+          frame of dark first. Reading localStorage can throw outright when
+          site data is blocked, hence the try - an unhandled error here would
+          block the document.
         */}
         <script
           dangerouslySetInnerHTML={{
             __html:
               "try{var t=localStorage.getItem('cachet:theme');" +
-              "if(t!=='system'){document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark')}}" +
+              "var d=t==='system'" +
+              "?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')" +
+              ":(t==='light'?'light':'dark');" +
+              "document.documentElement.setAttribute('data-theme',d)}" +
               "catch(e){document.documentElement.setAttribute('data-theme','dark')}",
           }}
         />
@@ -108,6 +116,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           left the docket, the forms and the docs with no pointer at all.
         */}
         <Cursor />
+        {/*
+          Global for the same reason as the cursor above. The boot script in
+          <head> resolves the palette before the first frame and the dashboard
+          toggle applies a deliberate change; this is the third case - the OS
+          switching under a reader who chose "system" - and it has to work on
+          every route, not only the one that happens to own the control.
+        */}
+        <ThemeSync />
         {children}
       </body>
     </html>

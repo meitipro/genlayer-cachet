@@ -36,3 +36,6 @@ __pycache__/
 
 # internal working notes, not part of the published project
 SUBMISSION.md
+
+# production material, not part of the published site
+production/

@@ -190,14 +190,33 @@ export async function readRound(id: number): Promise<ReadResult<RoundView>> {
   if (round === null) return { state: "unavailable" };
   if (round.found === false) return { state: "absent" };
 
+  // `?? []` here would be the whole problem: the round read succeeded, so the
+  // page should render, but a FAILED bids read must arrive as null rather than
+  // as an empty list. An empty list is a claim that nobody bid.
   const bidData = await call<{ found: boolean; bids: Bid[] }>("bids", [id]);
-  return { state: "ok", value: { round, bids: bidData?.bids ?? [] } };
+  return { state: "ok", value: { round, bids: bidData === null ? null : (bidData.bids ?? []) } };
 }
 
 /** For callers that genuinely only need the happy path, such as the home page. */
 export async function getRound(id: number): Promise<RoundView | null> {
   const result = await readRound(id);
   return result.state === "ok" ? result.value : null;
+}
+
+/**
+ * One bid, with its proposal in full.
+ *
+ * The `bids` list truncates each proposal to 400 characters so that a round
+ * with twelve long submissions is not one enormous response. The detail page
+ * needs the whole text - it was showing the truncated copy under a heading
+ * giving the FULL character count, which reads as "here are all 2,140
+ * characters" while silently stopping at 400. So the page reads this view
+ * instead, and falls back to the truncated copy only when this read fails,
+ * where it says so.
+ */
+export async function getBid(id: number, index: number): Promise<Bid | null> {
+  const data = await call<{ found: boolean; bid: Bid }>("bid", [id, index]);
+  return data && data.found ? data.bid : null;
 }
 
 /**

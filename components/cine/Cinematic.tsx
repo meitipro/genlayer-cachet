@@ -22,11 +22,11 @@ import Landing from "./Landing";
  */
 export default function Cinematic({
   network,
-  live,
+  configured,
   openRounds,
 }: {
   network: string;
-  live: boolean;
+  configured: boolean;
   openRounds: number | null;
 }) {
   const router = useRouter();
@@ -59,7 +59,7 @@ export default function Cinematic({
       <Intro />
       <Landing
         network={network}
-        live={live}
+        configured={configured}
         openRounds={openRounds}
         menu={menu}
         setMenu={setMenu}

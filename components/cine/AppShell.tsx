@@ -36,7 +36,20 @@ export default function AppShell({
 }) {
   const pathname = usePathname();
   const { address, connect, busy } = useWallet();
-  const [theme, setTheme] = useState<"system" | "light" | "dark">("dark");
+  // Read synchronously in the initial state, not in an effect: the boot script
+  // in the layout has already painted from this same value, and setting it a
+  // frame later would write "dark" over a reader's "system" and then take it
+  // back again.
+  const [theme, setTheme] = useState<"system" | "light" | "dark">(() => {
+    if (typeof window === "undefined") return "dark";
+    try {
+      const saved = window.localStorage.getItem("cachet:theme");
+      if (saved === "light" || saved === "dark" || saved === "system") return saved;
+    } catch {
+      /* storage blocked; fall through to the default */
+    }
+    return "dark";
+  });
   const [wide, setWide] = useState(true);
   const [sheet, setSheet] = useState(false);
 
@@ -53,15 +66,6 @@ export default function AppShell({
       /* storage blocked; the choice simply does not persist */
     }
   }, [theme]);
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem("cachet:theme");
-      if (saved === "light" || saved === "dark" || saved === "system") setTheme(saved);
-    } catch {
-      /* see above */
-    }
-  }, []);
 
   // A route change closes the mobile sheet. Without this the rail stays over
   // the page you just navigated to, which reads as a broken link.
@@ -166,7 +170,7 @@ export default function AppShell({
           data-wide={wide ? "1" : "0"}
           data-sheet={sheet ? "1" : "0"}
           onMouseEnter={() => setWide(true)}
-          onMouseLeave={() => setWide(true)}
+          onMouseLeave={() => setWide(false)}
           style={{ borderRight: "1px solid var(--track)", padding: "16px 12px", display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden" }}
         >
           <button

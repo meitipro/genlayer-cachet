@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import Cursor from "./Cursor";
 import Intro from "./Intro";
 import Landing from "./Landing";
 
 /**
- * The landing experience: intro, cursor, header, hero, demo card.
+ * The landing experience: intro, header, hero, demo card.
  *
  * This is the one route that takes over the viewport, so it is also the one
  * route that adds `.cine` to the root element. That class carries the overflow
@@ -57,7 +56,6 @@ export default function Cinematic({
 
   return (
     <main style={{ position: "fixed", inset: 0, isolation: "isolate", background: "#0B0907" }}>
-      <Cursor />
       <Intro />
       <Landing
         network={network}

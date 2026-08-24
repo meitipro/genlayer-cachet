@@ -11,7 +11,19 @@
  *      so the build stays green while the site ships a system fallback. On a
  *      design that is almost entirely typography that is the worst failure mode
  *      available: invisible in CI, obvious to every reader.
- *   2. The overflow lock on html and body is scoped to the cinematic route
+ *   2. The shell's light-theme selector reads the attribute from :root
+ *      rather than from #appwrap. The theme is one choice for the whole
+ *      document - the page content inside the shell reads it from :root too -
+ *      and with the attribute on #appwrap only the chrome switched while every
+ *      page inside it stayed dark.
+ *   3. Six element-level declarations that hardcoded the dark palette - the
+ *      body colour and background, link colours, the selection highlight and
+ *      the focus ring - now read the theme tokens instead. This sheet loads
+ *      after globals.css and so won every one of those on specificity, which
+ *      meant the light theme flipped all the tokens and left the page itself
+ *      black with pale text: a light card on a black body. A ported sheet has
+ *      to sit inside the theme system, not on top of it.
+ *   4. The overflow lock on html and body is scoped to the cinematic route
  *      only, through a .cine class on the root element. Applied globally it
  *      would trap every long page - the docs, the docket - at one viewport
  *      height with no way to scroll.
@@ -21,15 +33,15 @@
  */
 
 *{box-sizing:border-box}
-  html,body{background:#0B0907;margin:0;min-height:100%}
+  html,body{background:var(--cream);margin:0;min-height:100%}
   html.cine,html.cine body{overflow:hidden;height:100%}
-  body{font-family:var(--sans);color:#F1EAD9;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-  a{color:#E8785E;text-decoration:none}
-  a:hover{color:#F1EAD9}
-  ::selection{background:#A6321F;color:#F6EEDE}
+  body{font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  a{color:var(--link-fg);text-decoration:none}
+  a:hover{color:var(--link-hover-fg)}
+  ::selection{background:var(--accent-fill);color:var(--on-accent)}
   button,a{transition:filter 140ms ease,opacity 140ms ease}
   button:hover,a:hover{filter:brightness(1.08)}
-  button:focus-visible,a:focus-visible{outline:2px solid #F1EAD9;outline-offset:3px}
+  button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   @keyframes en-brand{from{opacity:0;transform:translateY(7px) scale(.94)}to{opacity:1;transform:none}}
   @keyframes en-nav{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   @keyframes en-action{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
@@ -138,7 +150,7 @@
     --pill:linear-gradient(145deg,rgba(44,26,20,.9),rgba(22,13,10,.9));
     color:var(--fg);
   }
-  #appwrap[data-theme="light"]{
+  :root[data-theme="light"] #appwrap{
     --fg:#16130E;--fg2:#4B463A;--fg3:#5F5847;--dim:#6B6353;--dim2:#6B6353;
     --line:rgba(22,19,14,.17);--line2:rgba(22,19,14,.11);--track:rgba(22,19,14,.11);
     --tint:rgba(22,19,14,.05);--tint2:rgba(22,19,14,.03);
@@ -149,9 +161,9 @@
     --panel:linear-gradient(160deg,#FCF8EF,#F2EAD8);
     --pill:linear-gradient(145deg,#F2EAD8,#E7DDC7);
   }
-  #appwrap[data-theme="light"] #themesw button{color:rgba(22,19,14,.42)}
-  #appwrap[data-theme="light"] #themesw button[data-on="1"]{color:#16130E}
-  #appwrap[data-theme="light"] #themesw button[data-on="1"]::before{border-color:rgba(22,19,14,.24)}
+  :root[data-theme="light"] #appwrap #themesw button{color:rgba(22,19,14,.42)}
+  :root[data-theme="light"] #appwrap #themesw button[data-on="1"]{color:#16130E}
+  :root[data-theme="light"] #appwrap #themesw button[data-on="1"]::before{border-color:rgba(22,19,14,.24)}
 
   /* --- 4. toasts --- */
   @keyframes tx-in{from{opacity:0;transform:translateX(26px) scale(.96)}to{opacity:1;transform:none}}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 
+import Cursor from "@/components/cine/Cursor";
 import { ORIGIN } from "@/lib/chain";
 
 import "./globals.css";
@@ -74,11 +75,41 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        {/*
+          The theme, decided BEFORE first paint.
+          Set from React instead and the server markup carries no attribute, so
+          a reader who chose light gets a frame of the dark palette before the
+          effect runs. This runs synchronously in <head>, ahead of any paint,
+          and defaults to dark because that is what the design is. Reading
+          localStorage can throw outright when site data is blocked, hence the
+          try - an unhandled error here would block the document.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('cachet:theme');" +
+              "if(t!=='system'){document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark')}}" +
+              "catch(e){document.documentElement.setAttribute('data-theme','dark')}",
+          }}
+        />
+      </head>
       {/* No chrome here on purpose. The two route groups bring their own: the
           cinematic route is a fixed full-viewport app, and everything else
           keeps the rule bar, header and footer. */}
-      <body>{children}</body>
+      <body>
+        {/*
+          Global, because the rule it replaces is global.
+          cinematic.css carries the handoff's `cursor:none !important` under
+          `(hover:hover) and (pointer:fine)`, which is every desktop mouse on
+          every page. In the handoff that is safe: the whole design is one
+          page, and the custom cursor is always mounted. Here it would have
+          left the docket, the forms and the docs with no pointer at all.
+        */}
+        <Cursor />
+        {children}
+      </body>
     </html>
   );
 }

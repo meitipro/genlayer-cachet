@@ -142,8 +142,7 @@
  * puts the original paper palette back, and no attribute at all means "follow
  * the system", resolved by the media query.
  */
-:root[data-theme="dark"],
-:root:not([data-theme="light"]) {
+:root[data-theme="dark"] {
   --cream: #0b0907;
   --paper: #120e0b;
   --paper-2: #171210;
@@ -209,8 +208,20 @@
  * so the overrides have to be neutralised or a "dark" band inside a dark page
  * lands lighter than its surroundings.
  */
-:root[data-theme="dark"] .on-ink,
-:root:not([data-theme="light"]) .on-ink {
+/*
+ * No attribute means "follow the system", and it has to actually do that: the
+ * switcher offers System / Light / Dark, and the first of those was a label on
+ * a button that always produced dark. A boot script in the layout writes an
+ * explicit attribute before first paint, so this branch is only ever reached
+ * by a reader who chose System.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] .on-ink {
   background: var(--paper-2);
 }
 

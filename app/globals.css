@@ -2099,3 +2099,364 @@ canvas {
     width: calc(100vw - 32px);
   }
 }
+
+/* ==========================================================================
+   dApp panes
+   ==========================================================================
+
+   The handoff's six views. Its markup is inline styles over a fixed dark
+   palette; these are the same shapes over the theme tokens, so the panes work
+   in light as well - which the design never had to think about because it only
+   ever drew one theme. */
+
+.view-pane {
+  padding: clamp(20px, 2.6vw, 34px) var(--gutter);
+}
+
+.view-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.view-title {
+  margin: 0 0 6px;
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.7px;
+  color: var(--ink);
+}
+
+.view-sub {
+  margin: 0;
+  font-size: 14px;
+  color: var(--note-fg);
+}
+
+.view-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 40px;
+  padding: 0 17px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: linear-gradient(145deg, #b93a24, #8c2818);
+  color: #f6eede;
+  font-family: var(--sans);
+  font-size: 14.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 0 22px rgba(166, 50, 31, 0.3);
+}
+
+.stat-grid {
+  margin-bottom: 12px;
+}
+
+.stat-card {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.stat-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  color: var(--label-fg);
+}
+
+.stat-delta {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--accent-fg);
+}
+.stat-delta.down {
+  color: var(--warn-fg);
+}
+
+.stat-value {
+  font-size: clamp(22px, 2.4vw, 28px);
+  font-weight: 600;
+  letter-spacing: -0.8px;
+  color: var(--ink);
+}
+
+.stat-unit {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--label-fg);
+}
+
+.view-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .view-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.empty-line {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--note-fg);
+}
+
+.panel-note {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--note-fg);
+}
+
+/* The award ratio. A bar rather than the design's donut: the same one number,
+   readable at a glance, and it does not need a legend to say which slice is
+   which. */
+.ratio-bar {
+  height: 10px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: var(--tint2, var(--band));
+  border: 1px solid var(--line);
+}
+
+.ratio-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #8c2818, #c4472e);
+}
+
+.ratio-legend {
+  display: flex;
+  gap: 18px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--note-fg);
+}
+
+.ratio-legend b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.needs-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.needs-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--band);
+}
+
+.needs-id {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--accent-fg);
+}
+
+.needs-what {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--body);
+}
+
+/* Row lists shared by Treasury, My bids and Scorecards. One shape, because
+   they are one shape in the handoff too. */
+.escrow-list,
+.mine-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.escrow-list li,
+.mine-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--band);
+}
+
+.escrow-id,
+.mine-id {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--accent-fg);
+}
+
+.escrow-title,
+.mine-title {
+  flex: 1;
+  min-width: 140px;
+  font-size: 13.5px;
+  color: var(--body);
+}
+
+.escrow-amount {
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.escrow-phase,
+.mine-status {
+  flex: none;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--note-fg);
+}
+
+.escrow-phase.phase-commit,
+.mine-status.s-sealed {
+  border-color: var(--chip-border);
+  color: var(--accent-fg);
+}
+
+.mine-status.s-scored,
+.mine-status.s-revealed {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+/* The contract surface. */
+.contract-addr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.contract-addr code {
+  font-size: 12px;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.method-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.method-list li {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--band);
+}
+
+.method-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.method-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.method-kind {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--label-fg);
+}
+
+.method-kind.kind-write {
+  border-color: var(--chip-border);
+  color: var(--accent-fg);
+}
+
+.method-args {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--label-fg);
+  overflow-wrap: anywhere;
+}
+
+.method-note {
+  margin: 7px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--note-fg);
+}
+
+/* The dApp topbar. */
+.app-topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px clamp(18px, 2.6vw, 32px);
+  border-bottom: 1px solid var(--track);
+  white-space: nowrap;
+}
+
+/* Below 560px the row wraps instead of overflowing. `min-width:0` on the
+   children is the part that actually does it: a flex item defaults to
+   `min-width:auto`, so it refuses to shrink past its content and pushes the
+   row wider than the viewport rather than wrapping. */
+@media (max-width: 560px) {
+  .app-topbar {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .app-topbar > * {
+    min-width: 0;
+  }
+}

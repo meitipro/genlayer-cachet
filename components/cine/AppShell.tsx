@@ -24,7 +24,16 @@ import { shortAddress } from "@/lib/format";
  * beside a nav item that nobody read from anywhere is exactly the kind of
  * decoration this project refuses.
  */
-type Counts = { rounds: number | null; open: number | null };
+/**
+ * The rail badges.
+ *
+ * `mine` is null unless something already knows it. The handoff prints a 4
+ * beside "My bids", but that number belongs to the connected address, and this
+ * shell is rendered on the server where no address is known - so the badge is
+ * left off rather than filled with a guess. The My bids screen itself reads
+ * and shows the real figure.
+ */
+type Counts = { rounds: number | null; open: number | null; mine?: number | null };
 
 export default function AppShell({
   children,
@@ -150,18 +159,12 @@ export default function AppShell({
 
   return (
     <div id="appwrap" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--shell)" }}>
-      {/* topbar */}
-      <div
-        style={{
-          flex: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          padding: "14px clamp(18px,2.6vw,32px)",
-          borderBottom: "1px solid var(--track)",
-          whiteSpace: "nowrap",
-        }}
-      >
+      {/* topbar. Class rather than inline styles for the wrapping, because
+          the handoff sets `white-space:nowrap` here and at 320px the theme
+          switcher, the wallet control and Exit simply do not fit on one line:
+          measured 398px of content in a 320px viewport, which is a page that
+          scrolls sideways on a phone. */}
+      <div className="app-topbar">
         <button
           id="railtoggle"
           type="button"
@@ -260,14 +263,27 @@ export default function AppShell({
           <div style={{ height: 1, background: "var(--line2)", margin: "14px 0" }} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* The handoff's three groups and its seven destinations, in its
+                order. Every icon path is the design's own. */}
             <Group label="TENDERING">
+              <RailLink href="/app" label="Overview" active={active("/app")} icon={<path d="M3 3h7v7H3zM11 3h7v7h-7zM3 11h7v7H3zM11 11h7v7h-7z" />} />
               <RailLink href="/rounds" label="Docket" badge={counts.rounds} active={active("/rounds")} icon={<path d="M7 5h11M7 10h11M7 15h11M3.5 5h.01M3.5 10h.01M3.5 15h.01" />} />
-              <RailLink href="/publish" label="Publish" active={active("/publish")} icon={<path d="M10 4v12M4 10h12" />} />
-              <RailLink href="/exhibit" label="A finished round" active={active("/exhibit")} icon={<path d="M4 16V9M9 16V4M14 16v-5M19 16v-9" />} />
+              <RailLink href="/contract" label="Contract" active={active("/contract")} icon={<path d="M7 6l-4 4 4 4M14 6l4 4-4 4" />} />
             </Group>
 
-            <Group label="RECORDS">
-              <RailLink href="/docs" label="How it works" active={active("/docs")} icon={<path d="M7 6l-4 4 4 4M14 6l4 4-4 4" />} />
+            <Group label="BIDDING">
+              <RailLink href="/my-bids" label="My bids" badge={counts.mine} active={active("/my-bids")} icon={<path d="M3 8.5V4h4.5l9 9-4.5 4.5-9-9zM6 6.5h.01" />} />
+              <RailLink href="/scorecards" label="Scorecards" active={active("/scorecards")} icon={<path d="M4 16V9M9 16V4M14 16v-5M19 16v-9" />} />
+            </Group>
+
+            <Group label="FINANCE">
+              <RailLink href="/treasury" label="Treasury" active={active("/treasury")} icon={<path d="M3 5h15v11H3zM10.5 10.5h.01M6 16v2M15 16v2" />} />
+            </Group>
+
+            {/* Not in the handoff's rail, and kept because dropping it would
+                strand the one page that explains the scoring rule. */}
+            <Group label="REFERENCE">
+              <RailLink href="/docs" label="How it works" active={active("/docs")} icon={<path d="M10 3a7 7 0 100 14 7 7 0 000-14zM10 14h.01M10 7v4" />} />
             </Group>
           </div>
 

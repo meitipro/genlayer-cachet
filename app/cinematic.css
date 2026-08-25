@@ -72,6 +72,22 @@
      already seen it this session. CSS rather than a mounted/unmounted branch,
      so the server and client render identical markup. */
   html[data-intro="skip"] .cine-intro{display:none}
+  /* The connect gate's second step and its overlay. Fixed colours here rather
+     than theme tokens, because this screen is the cinematic surface: it is the
+     same dark field in both themes, exactly as the handoff draws it. */
+  .gate-approve{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:18px;animation:cn-rise 520ms cubic-bezier(.16,1,.3,1) both}
+  .gate-approve-lede{margin:0;max-width:30ch;font-family:var(--sans);font-size:13.5px;line-height:1.55;color:rgba(241,234,217,.72)}
+  .gate-message{width:100%;margin:0;padding:14px;border:1px solid rgba(241,234,217,.14);border-radius:12px;background:rgba(11,9,7,.6);font-family:var(--mono);font-size:11px;line-height:1.7;color:#C9C0AC;text-align:left;white-space:pre-wrap;word-break:break-word}
+  .gate-approve-go{width:100%;height:44px;font-size:15px}
+  .gate-back{border:none;background:transparent;color:rgba(241,234,217,.7);font-family:var(--sans);font-size:13.5px;cursor:pointer}
+  .gate-approve-note{margin:0;max-width:34ch;font-family:var(--sans);font-size:11.5px;line-height:1.6;color:rgba(241,234,217,.58)}
+  .gate-busy{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(6,4,3,.66);backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);animation:cn-fade 240ms ease both}
+  .gate-busy-card{width:min(340px,100%);display:flex;flex-direction:column;align-items:center;gap:14px;padding:34px 26px;border:1px solid rgba(241,234,217,.16);border-radius:18px;background:linear-gradient(160deg,rgba(36,25,20,.96),rgba(11,8,6,.98));box-shadow:0 30px 80px rgba(0,0,0,.62);text-align:center}
+  .gate-spinner{position:relative;width:48px;height:48px;border:2px solid rgba(232,120,94,.22);border-top-color:#E8785E;border-radius:50%;animation:orbit 780ms linear infinite}
+  @keyframes orbit{to{transform:rotate(360deg)}}
+  .gate-tick{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;background:#7FD08A}
+  .gate-busy-title{margin:0;font-family:var(--sans);font-size:16px;font-weight:500;color:#F1EAD9}
+  .gate-busy-sub{margin:0;font-family:var(--sans);font-size:12px;line-height:1.55;color:#9A9080;word-break:break-all}
   /*
    * Reduced motion suppresses the ANIMATION, not the layout.
    *

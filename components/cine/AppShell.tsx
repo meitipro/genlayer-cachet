@@ -47,7 +47,7 @@ export default function AppShell({
   const pathname = usePathname();
   // Only the address, and only so the rail can link somebody to their own
   // record. Connecting, the balance and the faucet all live in WalletChip.
-  const { address } = useWallet();
+  const { address, disconnect } = useWallet();
   /*
    * The same first frame on the server and on the client, deliberately.
    *
@@ -307,6 +307,24 @@ export default function AppShell({
                 Connect a wallet to see your own record.
               </p>
             )}
+
+            {/* Disconnect belongs beside the account it disconnects, not only
+                behind the header chip's menu. Worded as "forget" because that
+                is what it does: EIP-1193 has no revoke, so the site stops using
+                the account and the wallet keeps its permission. */}
+            {address ? (
+              <button
+                type="button"
+                onClick={disconnect}
+                data-lbl=""
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", marginTop: 8, padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 7, background: "transparent", color: "var(--fg2)", fontFamily: "var(--sans)", fontSize: 12.5, cursor: "pointer" }}
+              >
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                  <path d="M12 6V4H4v12h8v-2M9 10h8M14 7l3 3-3 3" />
+                </svg>
+                Forget this account
+              </button>
+            ) : null}
           </div>
         </nav>
 

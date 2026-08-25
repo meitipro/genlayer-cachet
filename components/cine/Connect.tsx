@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { recoverMessageAddress } from "viem";
 import { useRouter } from "next/navigation";
 
 import { Mark } from "./Mark";
-import { ADD_CHAIN_PARAMS, CHAIN_ID_HEX } from "@/lib/chain";
-import { readableError } from "@/components/wallet";
+import { ADD_CHAIN_PARAMS, CHAIN_ID_HEX, NETWORK_LABEL } from "@/lib/chain";
+import { readableError, useWallet } from "@/components/wallet";
 import { type Announced, remember, wallets } from "@/components/providers";
 
 /**
@@ -36,6 +37,27 @@ import { type Announced, remember, wallets } from "@/components/providers";
  * the way in to doing something. Reading is not doing something.
  */
 
+/**
+ * What the wallet is asked to sign.
+ *
+ * Names this origin, the address and the network, and carries a per-visit
+ * nonce. Plain text on purpose: a person approving it in their wallet should
+ * be able to read exactly what they are agreeing to, and "sign this opaque
+ * hex" is how signature prompts get approved without being read.
+ */
+function signInMessage(address: string, nonce: string): string {
+  const origin = typeof window !== "undefined" ? window.location.host : "cachet";
+  return [
+    `${origin} is checking that this wallet can sign.`,
+    "",
+    `Address: ${address}`,
+    `Network: ${NETWORK_LABEL}`,
+    `Nonce: ${nonce}`,
+    "",
+    "This authorises nothing and moves no funds.",
+  ].join("\n");
+}
+
 export default function Connect({
   network,
   destination,
@@ -47,11 +69,31 @@ export default function Connect({
   onBack: () => void;
 }) {
   const router = useRouter();
+  const wallet = useWallet();
   const [shown, setShown] = useState<Announced[]>([]);
   /** False until discovery has had a chance to answer, so "none" is not claimed early. */
   const [scanned, setScanned] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
+  /** Which of the handoff's two steps is showing. */
+  const [step, setStep] = useState<"wallet" | "approve">("wallet");
+  const [picked, setPicked] = useState<{ wallet: Announced; address: string } | null>(null);
+  /** The overlay the design draws over both steps. */
+  const [phase, setPhase] = useState<"idle" | "signing" | "done">("idle");
+
+  /**
+   * One nonce per visit to this screen.
+   *
+   * It makes the message unique so a signature captured from somewhere else
+   * cannot be replayed into this one. Generated with `crypto.getRandomValues`
+   * rather than `Math.random`, which is not unpredictable and has no business
+   * anywhere near a challenge.
+   */
+  const nonce = useMemo(() => {
+    const bytes = new Uint8Array(8);
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  }, []);
 
   /**
    * The wallets installed in this browser.
@@ -99,21 +141,100 @@ export default function Connect({
             throw switchError;
           }
         }
-        // Recorded before navigating, and by `rdns` rather than the announced
-        // uuid: a uuid is generated per page load, so it names the
+        // Recorded before the signature step, and by `rdns` rather than the
+        // announced uuid: a uuid is generated per page load, so it names the
         // announcement rather than the wallet and would never match again.
         // Everything downstream - the account the app displays, and the
         // provider the SDK signs through - resolves from this.
         remember(wallet.info.rdns);
-        router.push(destination);
+        setPicked({ wallet, address: accounts[0] });
+        setStep("approve");
       } catch (e) {
         setError(readableError(e));
       } finally {
         setBusy(null);
       }
     },
-    [destination, router],
+    [],
   );
+
+  /**
+   * The handoff's second step: sign, and CHECK the signature.
+   *
+   * The design draws a sign-in message and an "Approve in wallet" button. Read
+   * literally that is a login, and a login here would be theatre: nothing on
+   * this site has a server session, and the contract authorises writes from
+   * `gl.message.sender_address` - the transaction's own signer - so a
+   * signature the page collected proves nothing to anything downstream.
+   *
+   * What it IS good for is worth the step. It asks the wallet to sign now,
+   * before an entry deposit is spent, and then RECOVERS the address from the
+   * signature and compares. That catches, at the cheapest possible moment, the
+   * two cases where somebody would otherwise discover the problem halfway
+   * through sealing a bid: a watch-only or imported address the wallet cannot
+   * sign for, and a wallet that hands back a different account than the one it
+   * just reported.
+   *
+   * So the copy says what it does rather than "sign in", and the recovery is
+   * real rather than decorative. A signature nobody verifies would be a worse
+   * lie than not asking for one.
+   */
+  const approve = useCallback(async () => {
+    if (!picked) return;
+    setError("");
+    setPhase("signing");
+    try {
+      const message = signInMessage(picked.address, nonce);
+      const signature = (await picked.wallet.provider.request({
+        method: "personal_sign",
+        params: [message, picked.address],
+      })) as string;
+
+      /**
+       * Both failures read the same to a person, so they say the same thing.
+       *
+       * A malformed signature makes `recoverMessageAddress` throw with its own
+       * wording - "Invalid yParityOrV value" reached the screen during
+       * testing - and a well-formed signature from another key recovers
+       * cleanly to the wrong address. Neither is something a reader can act on
+       * as stated, and both mean exactly one thing: this wallet did not prove
+       * it holds this address.
+       */
+      let signer = "";
+      try {
+        signer = await recoverMessageAddress({
+          message,
+          signature: signature as `0x${string}`,
+        });
+      } catch {
+        signer = "";
+      }
+      if (!signer || signer.toLowerCase() !== picked.address.toLowerCase()) {
+        throw new Error(
+          "That signature does not belong to this address, so nothing was connected. It usually means the wallet is watching the account rather than holding its key.",
+        );
+      }
+
+      /**
+       * Tell the shared wallet state to look again.
+       *
+       * It read the account once when the app mounted, and at that moment
+       * nothing was chosen yet - so without this the connection succeeds, the
+       * choice is stored, and the header chip stays empty until a reload.
+       * Measured: connected through the gate, landed on the docket, and the
+       * chip still offered "Connect wallet".
+       */
+      await wallet.refresh();
+
+      setPhase("done");
+      // A beat on the confirmation, which is the design's own done state, then
+      // on to wherever they were heading.
+      setTimeout(() => router.push(destination), 900);
+    } catch (e) {
+      setPhase("idle");
+      setError(readableError(e));
+    }
+  }, [destination, nonce, picked, router, wallet]);
 
   return (
     <section
@@ -240,13 +361,19 @@ export default function Connect({
             animation: "cn-rise 560ms cubic-bezier(.16,1,.3,1) 60ms both",
           }}
         >
-          Connect
-          <br />
-          your wallet
+          {step === "approve" ? (
+            <>One last step</>
+          ) : (
+            <>
+              Connect
+              <br />
+              your wallet
+            </>
+          )}
         </h1>
 
         {/* Three states, and only one of them is a list. */}
-        {!scanned && shown.length === 0 ? (
+        {step === "approve" ? null : !scanned && shown.length === 0 ? (
           <p
             style={{
               margin: "20px 0 0",
@@ -446,6 +573,63 @@ export default function Connect({
             Connecting only proves the address. Sealing a bid is a separate signature you approve
             per round.
           </p>
+        ) : null}
+
+        {/* Step two, and the overlay the design draws over both. */}
+        {step === "approve" && picked ? (
+          <div className="gate-approve">
+            <p className="gate-approve-lede">
+              Sign this message so the wallet proves it can sign for this address
+            </p>
+            <pre className="gate-message">{signInMessage(picked.address, nonce)}</pre>
+            <button
+              type="button"
+              className="btn btn-primary btn-small gate-approve-go"
+              onClick={() => void approve()}
+              disabled={phase !== "idle"}
+            >
+              {phase === "signing" ? "Waiting for the wallet..." : "Approve in wallet"}
+            </button>
+            <button
+              type="button"
+              className="gate-back"
+              onClick={() => {
+                setStep("wallet");
+                setPicked(null);
+                setError("");
+              }}
+            >
+              Go back
+            </button>
+            <p className="gate-approve-note">
+              This authorises nothing and moves no funds. Sealing a bid is a separate signature
+              you approve per round.
+            </p>
+          </div>
+        ) : null}
+
+        {phase !== "idle" ? (
+          <div className="gate-busy" role="status" aria-live="polite">
+            <div className="gate-busy-card">
+              {phase === "signing" ? (
+                <>
+                  <span className="gate-spinner" aria-hidden="true" />
+                  <p className="gate-busy-title">Waiting for the wallet</p>
+                  <p className="gate-busy-sub">Approve the message in your wallet to continue.</p>
+                </>
+              ) : (
+                <>
+                  <span className="gate-tick" aria-hidden="true">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0B0907" strokeWidth="2.4">
+                      <path d="M4 12.6l5.2 5.2L20 7" />
+                    </svg>
+                  </span>
+                  <p className="gate-busy-title">Wallet connected</p>
+                  <p className="gate-busy-sub mono">{picked ? picked.address : ""}</p>
+                </>
+              )}
+            </div>
+          </div>
         ) : null}
 
         <p

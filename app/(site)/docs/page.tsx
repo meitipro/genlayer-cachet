@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
+import ShaderCard from "@/components/ShaderCard";
 import { getTerms } from "@/lib/cachet";
 import { LIMITS } from "@/lib/limits";
 import { CACHET, IS_LIVE, NETWORK_LABEL, RPC_URL, explorerAddress, HAS_EXPLORER } from "@/lib/chain";
@@ -267,13 +268,8 @@ export default async function DocsPage() {
                 "The settlement path around this is yours",
                 "GenLayer supports an agreed settlement workflow, and this contract gives you a record every party can check line by line. Turning that record into a binding obligation is contract law, not consensus: the agreements, the jurisdiction and the escalation path stay where they were.",
               ],
-            ].map(([title, body]) => (
-              <div key={title} className="step">
-                <div className="step-name" style={{ fontSize: 17 }}>
-                  {title}
-                </div>
-                <div className="step-body">{body}</div>
-              </div>
+            ].map(([title, body], i) => (
+              <ShaderCard key={title} title={title} body={body} index={i} />
             ))}
           </div>
         </div>

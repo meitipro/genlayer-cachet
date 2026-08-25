@@ -1978,3 +1978,124 @@ canvas {
     display: none;
   }
 }
+
+/* ==========================================================================
+   The wallet chip
+   ==========================================================================
+
+   Everything here reads from the theme tokens rather than fixed colours: this
+   control sits in the header on every page, in both themes, and a hardcoded
+   pair is exactly how the reveal-window banner became unreadable once already. */
+
+.wallet-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.wallet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Connected, and on the right network. The dot is the only status colour and
+   it is paired with text, never carrying the meaning on its own. */
+.wallet-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-fill);
+  box-shadow: 0 0 7px var(--chip-border);
+  flex-shrink: 0;
+}
+
+.wallet-bal {
+  padding-left: 8px;
+  border-left: 1px solid var(--rule);
+  color: var(--note-fg);
+}
+
+.wallet-wrong {
+  border-color: var(--warn-border);
+  color: var(--warn-strong);
+  background: var(--warn-bg);
+}
+
+.wallet-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  min-width: 268px;
+  max-width: calc(100vw - 32px);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
+}
+
+.wallet-menu-addr {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--note-fg);
+  overflow-wrap: anywhere;
+}
+
+.wallet-menu-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.wallet-menu-label {
+  font-family: var(--sans);
+  color: var(--label-fg);
+}
+
+.wallet-menu-value {
+  font-size: 11.5px;
+  color: var(--body);
+}
+
+.wallet-menu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wallet-menu-why {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--note-fg);
+}
+
+.wallet-menu-note {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 9px 11px;
+  border: 1px solid var(--warn-border);
+  border-radius: 7px;
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+}
+
+/* On a narrow phone the menu is anchored to the viewport rather than to a chip
+   that may be near the right edge, which would otherwise push it off screen. */
+@media (max-width: 520px) {
+  .wallet-menu {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 0;
+    width: calc(100vw - 32px);
+  }
+}

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Mark } from "./Mark";
+import WalletChip from "@/components/WalletChip";
 import { useWallet } from "@/components/wallet";
 import { shortAddress } from "@/lib/format";
 
@@ -35,7 +36,9 @@ export default function AppShell({
   counts: Counts;
 }) {
   const pathname = usePathname();
-  const { address, connect, busy } = useWallet();
+  // Only the address, and only so the rail can link somebody to their own
+  // record. Connecting, the balance and the faucet all live in WalletChip.
+  const { address } = useWallet();
   /*
    * The same first frame on the server and on the client, deliberately.
    *
@@ -198,25 +201,12 @@ export default function AppShell({
           ))}
         </div>
 
-        {address ? (
-          <span
-            title={address}
-            style={{ display: "inline-flex", alignItems: "center", gap: 9, height: 34, padding: "0 12px", border: "1px solid var(--line)", borderRadius: 7, background: "var(--pill)", fontFamily: "var(--mono)", fontSize: 11.5, color: "var(--fg)" }}
-          >
-            <i style={{ width: 14, height: 14, borderRadius: 4, background: "linear-gradient(140deg,var(--wax),#8C2818)", display: "block" }} />
-            {shortAddress(address)}
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={connect}
-            disabled={busy}
-            style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 34, padding: "0 14px", border: "1px solid var(--line)", borderRadius: 7, background: "linear-gradient(145deg,#B93A24,#8C2818)", color: "#F6EEDE", fontFamily: "var(--sans)", fontSize: 13.5, fontWeight: 500, cursor: "pointer", boxShadow: "0 0 20px rgba(166,50,31,.32)" }}
-          >
-            <i style={{ width: 6, height: 6, borderRadius: "50%", background: "#F6C7BB", display: "block" }} />
-            {busy ? "Connecting" : "Connect Wallet"}
-          </button>
-        )}
+        {/* The wallet control. It was a chip that printed an address and a
+            button that grabbed whichever wallet had injected itself - no
+            balance, no faucet, and no way to disconnect. Sealing a bid costs
+            an entry deposit here, so an account at zero could reach a refusal
+            with nothing on the page to resolve it. */}
+        <WalletChip />
 
         <Link
           href="/"

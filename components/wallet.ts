@@ -1,11 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "genlayer-js";
 
 import { ADD_CHAIN_PARAMS, CACHET, CHAIN, CHAIN_ID_HEX, IS_LIVE, NETWORK_LABEL } from "@/lib/chain";
-import { chosenProvider, remember, wallets } from "./providers";
+import { chosenProvider, chosenRdns, forget, remember, wallets } from "./providers";
+import { balanceOf } from "@/lib/funds";
 
 type Eip1193 = {
   request: (args: { method: string; params?: unknown[] | object }) => Promise<unknown>;
@@ -31,19 +41,33 @@ export type TxState = {
 /**
  * The connected account, on the wallet the reader actually chose.
  *
+ * ONE instance of this runs, inside `WalletProvider` at the bottom of this
+ * file, and every component reads that shared state through `useWallet`.
+ *
+ * It used to be a plain hook that each consumer called for itself, which
+ * meant each kept its own copy of the answer and they drifted apart.
+ * Measured: the bid panel discovered the wallet and reported the address
+ * while the header chip, whose own scan had run a moment earlier and found
+ * nothing, still offered "Connect wallet" on the same screen. Four
+ * independent scans also meant four rounds of EIP-6963 discovery and four
+ * `eth_accounts` calls per page, against a node that allows thirty requests
+ * a minute.
+ *
  * Every provider call here goes through `chosenProvider()` rather than
  * `window.ethereum`. The two are not the same thing when more than one wallet
  * is installed, and the difference is an address: a bid is committed as a hash
  * that binds the bidder's own address, so signing the reveal from a different
  * wallet produces a commitment mismatch the contract is right to refuse.
  */
-export function useWallet() {
+function useWalletEngine() {
   const router = useRouter();
   const pathname = usePathname();
   const [address, setAddress] = useState<string | null>(null);
   const [chainOk, setChainOk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /** Wei, or null when it has not been read or the node did not answer. */
+  const [balance, setBalance] = useState<bigint | null>(null);
 
   const refresh = useCallback(async () => {
     const eth = await chosenProvider();
@@ -141,7 +165,123 @@ export function useWallet() {
     }
   }, [refresh, router, pathname]);
 
-  return { address, chainOk, busy, error, connect, refresh, network: NETWORK_LABEL };
+  /**
+   * Ask the wallet to move to this chain, then READ THE CHAIN BACK.
+   *
+   * A successful `wallet_switchEthereumChain` is normally followed by a
+   * `chainChanged` event and the listener above picks it up. Normally. EIP-1193
+   * does not guarantee it, wallets differ on whether they fire it for a switch
+   * they were asked for, and there is a race either way. When it does not
+   * arrive the switch really happened and the screen still says wrong network -
+   * somebody presses the button, watches their wallet change, and sees nothing
+   * move here. One extra idempotent call closes that.
+   */
+  const switchChain = useCallback(async (): Promise<boolean> => {
+    const eth = await chosenProvider();
+    if (!eth) return false;
+    setError("");
+    try {
+      await eth.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: CHAIN_ID_HEX }],
+      });
+      await refresh();
+      return true;
+    } catch (e) {
+      if ((e as { code?: number })?.code === 4902) {
+        try {
+          await eth.request({ method: "wallet_addEthereumChain", params: [ADD_CHAIN_PARAMS] });
+          await refresh();
+          return true;
+        } catch (addError) {
+          setError(readableError(addError));
+          return false;
+        }
+      }
+      setError(readableError(e));
+      return false;
+    }
+  }, [refresh]);
+
+  /**
+   * Stop using the account here.
+   *
+   * EIP-1193 has no revoke. This forgets the choice on our side; the wallet
+   * keeps its permission until it is removed there, and the button copy says
+   * so rather than implying more than it does.
+   */
+  const disconnect = useCallback(() => {
+    forget();
+    setAddress(null);
+    setChainOk(false);
+    setBalance(null);
+    setError("");
+  }, []);
+
+  /**
+   * Keep listening for wallets after the first scan.
+   *
+   * Discovery runs once when this mounts and waits a fixed moment for
+   * announcements. An extension that is still starting up misses that window,
+   * and with a single shared state there is nothing else that would ever look
+   * again - the reader would see "Connect wallet" for a wallet that is sitting
+   * right there, until they reloaded.
+   *
+   * So an announcement matching the remembered choice re-runs the read. It
+   * costs nothing when no wallet announces late, which is the common case.
+   */
+  const caughtLate = useRef(false);
+  useEffect(() => {
+    const onAnnounce = (event: Event) => {
+      const info = (event as CustomEvent<{ info?: { rdns?: string } }>).detail?.info;
+      if (!info?.rdns) return;
+      if (info.rdns !== chosenRdns()) return;
+
+      /**
+       * Once only, and only while nothing is connected.
+       *
+       * EIP-6963 says a wallet re-announces whenever a page dispatches
+       * `requestProvider`, and `refresh` dispatches exactly that on its way to
+       * resolving the provider. Refreshing on every announcement therefore
+       * feeds itself: announce, refresh, request, announce. Measured before
+       * this guard - twenty-one rounds of `eth_accounts` and `eth_chainId`
+       * from a single late announcement, against a node that allows thirty
+       * requests a minute.
+       */
+      if (caughtLate.current || address) return;
+      caughtLate.current = true;
+      void refresh();
+    };
+    window.addEventListener("eip6963:announceProvider", onAnnounce);
+    return () => window.removeEventListener("eip6963:announceProvider", onAnnounce);
+  }, [refresh, address]);
+
+  const refreshBalance = useCallback(async () => {
+    if (!address) {
+      setBalance(null);
+      return;
+    }
+    setBalance(await balanceOf(address));
+  }, [address]);
+
+  /* Read it whenever the account or the network changes. */
+  useEffect(() => {
+    void refreshBalance();
+  }, [refreshBalance, chainOk]);
+
+  return {
+    address,
+    chainOk,
+    busy,
+    error,
+    connect,
+    refresh,
+    balance,
+    refreshBalance,
+    switchChain,
+    disconnect,
+    network: NETWORK_LABEL,
+  };
 }
 
 /**
@@ -284,3 +424,37 @@ export function refusalOf(receipt: unknown): string {
 
 export const CONTRACT = CACHET;
 export const CONTRACT_CONFIGURED = IS_LIVE;
+
+/* ==========================================================================
+   The shared instance
+   ========================================================================== */
+
+type WalletState = ReturnType<typeof useWalletEngine>;
+
+const WalletContext = createContext<WalletState | null>(null);
+
+/**
+ * Wraps the app so there is exactly one wallet state.
+ *
+ * Mounted in the root layout rather than per route group: the landing's
+ * connect step and the dashboard's chip have to agree with each other, and a
+ * provider covering only one of them would recreate the drift it exists to
+ * remove.
+ */
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const value = useWalletEngine();
+  return createElement(WalletContext.Provider, { value }, children);
+}
+
+/**
+ * The shared wallet state.
+ *
+ * Throws outside the provider rather than quietly returning a disconnected
+ * shape: a component reading "no wallet" because it was mounted in the wrong
+ * tree is a bug that looks exactly like a reader who has no wallet.
+ */
+export function useWallet(): WalletState {
+  const value = useContext(WalletContext);
+  if (!value) throw new Error("useWallet was called outside WalletProvider.");
+  return value;
+}

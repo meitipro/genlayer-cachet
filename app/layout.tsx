@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 
 import ThemeSync from "@/components/ThemeSync";
+import { WalletProvider } from "@/components/wallet";
 import Cursor from "@/components/cine/Cursor";
 import { ORIGIN } from "@/lib/chain";
 
@@ -151,7 +152,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           every route, not only the one that happens to own the control.
         */}
         <ThemeSync />
-        {children}
+        {/*
+          One wallet state for the whole app.
+          The landing's connect step and the dashboard's chip have to agree,
+          and before this each component ran its own discovery: the bid panel
+          could report an address while the header still offered Connect on
+          the same screen.
+        */}
+        <WalletProvider>{children}</WalletProvider>
       </body>
     </html>
   );

@@ -35,8 +35,15 @@ export default function Landing({
    * read" line below unreachable, since a failed read always cleared the flag.
    */
   configured: boolean;
-  /** Rounds currently taking bids, or null when that could not be read. */
-  openRounds: number | null;
+  /**
+   * Rounds currently taking bids.
+   *
+   * Three values, because there are three things to say. `undefined` is
+   * "still reading" - the hero paints before the count arrives now, so this
+   * is the first frame's honest answer. `null` is "the chain did not answer".
+   * A number is a number.
+   */
+  openRounds: number | null | undefined;
   menu: boolean;
   setMenu: (v: boolean) => void;
   onLaunch: () => void;
@@ -68,11 +75,13 @@ export default function Landing({
 
   const networkLine = !configured
     ? "No contract configured"
-    : openRounds === null
-      ? "Could not read the chain"
-      : openRounds === 0
-        ? "Live - no round open"
-        : `Live - ${openRounds} round${openRounds === 1 ? "" : "s"} open`;
+    : openRounds === undefined
+      ? "Reading the chain"
+      : openRounds === null
+        ? "Could not read the chain"
+        : openRounds === 0
+          ? "Live - no round open"
+          : `Live - ${openRounds} round${openRounds === 1 ? "" : "s"} open`;
 
   return (
     <section style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "100%", height: "100%", background: "#0B0907", overflow: "hidden" }}>

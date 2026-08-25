@@ -1,5 +1,12 @@
 /**
- * The loading state for every route.
+ * The loading state for the dApp routes.
+ *
+ * It lives in `(site)` rather than at the root ON PURPOSE. At the root it was
+ * the fallback for EVERY route, including the cinematic landing - so opening
+ * the site painted this cream panel reading "Reading the chain" for as long as
+ * the landing's contract read took, and only then did the dark hero and its
+ * seal animation arrive. A loading state for a page is fine; a loading state
+ * in front of the front door is the front door.
  *
  * Reads are not instant here: a round page asks the contract twice, and the
  * network answers in seconds when it is busy. Without this the browser holds

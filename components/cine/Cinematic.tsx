@@ -73,14 +73,39 @@ function safeReturnPath(raw: string | null): string {
 export default function Cinematic({
   network,
   configured,
-  openRounds,
 }: {
   network: string;
   configured: boolean;
-  openRounds: number | null;
 }) {
   const router = useRouter();
   const params = useSearchParams();
+  /**
+   * Rounds taking bids, fetched AFTER the hero has painted.
+   *
+   * Undefined means the answer has not arrived, null means it arrived as
+   * "could not read". The header needs both: one says wait, the other
+   * says the chain did not answer, and neither may be shown as a number.
+   */
+  const [openRounds, setOpenRounds] = useState<number | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!configured) {
+      setOpenRounds(null);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/open-rounds")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: { open: number | null }) => {
+        if (!cancelled) setOpenRounds(d.open);
+      })
+      .catch(() => {
+        if (!cancelled) setOpenRounds(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [configured]);
   const [menu, setMenu] = useState(false);
   /**
    * Which of the two full-screen views is showing.

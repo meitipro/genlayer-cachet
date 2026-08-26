@@ -2460,3 +2460,220 @@ canvas {
     min-width: 0;
   }
 }
+
+/* ==========================================================================
+   How it works
+   ==========================================================================
+
+   The handoff's timeline, with one addition: a state per stage. Its markup has
+   the badges written in, which is fine for a mockup and wrong for a pane that
+   sits inside the app - so `is-done`, `is-now` and `is-ahead` are set from
+   whichever round is actually live, and the icon and rail follow. */
+
+.how-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .how-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.how-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.how-lede {
+  margin: 0 0 24px;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--body);
+}
+
+.how-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.how-step {
+  display: flex;
+  gap: 18px;
+}
+
+.how-rail {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.how-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--band);
+  color: var(--label-fg);
+}
+
+/* The live stage is the only one that takes the accent, so the eye lands on
+   it before it reads a word. */
+.how-step.is-now .how-icon {
+  border-color: var(--chip-border);
+  background: var(--accent-wash);
+  color: var(--accent-fg);
+}
+
+.how-step.is-done .how-icon {
+  color: var(--body);
+}
+
+.how-line {
+  width: 1px;
+  flex: 1;
+  margin-top: 4px;
+  background: var(--line);
+}
+
+.how-body {
+  min-width: 0;
+  padding-bottom: 30px;
+}
+
+.how-step:last-child .how-body {
+  padding-bottom: 0;
+}
+
+.how-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.how-n {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--label-fg);
+}
+
+.how-title {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--ink);
+}
+
+.how-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--label-fg);
+}
+
+.how-badge.done {
+  color: var(--body);
+}
+
+.how-badge.now {
+  border-color: var(--chip-border);
+  color: var(--accent-fg);
+}
+
+.how-text {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--note-fg);
+}
+
+/* The live-round card takes the accent rule, matching the handoff. */
+.how-here {
+  border-color: var(--chip-border);
+}
+
+.how-here-stage {
+  font-size: 15px;
+  font-weight: 550;
+  margin-bottom: 5px;
+  color: var(--ink);
+}
+
+.how-here-line {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--note-fg);
+}
+
+.how-bar {
+  height: 5px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--rule);
+}
+
+.how-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #8c2818, #c4472e);
+}
+
+.how-pct {
+  margin-top: 7px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--label-fg);
+}
+
+.how-here-go {
+  margin-top: 14px;
+}
+
+.how-rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.how-rules li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--body);
+}
+
+.how-rules svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent-fg);
+}

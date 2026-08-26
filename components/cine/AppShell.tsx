@@ -280,10 +280,13 @@ export default function AppShell({
               <RailLink href="/treasury" label="Treasury" active={active("/treasury")} icon={<path d="M3 5h15v11H3zM10.5 10.5h.01M6 16v2M15 16v2" />} />
             </Group>
 
-            {/* Not in the handoff's rail, and kept because dropping it would
-                strand the one page that explains the scoring rule. */}
-            <Group label="REFERENCE">
-              <RailLink href="/docs" label="How it works" active={active("/docs")} icon={<path d="M10 3a7 7 0 100 14 7 7 0 000-14zM10 14h.01M10 7v4" />} />
+            {/* The handoff added this group in its second revision, with the
+                protocol walkthrough as a pane rather than a link out to the
+                marketing page. Both are kept: the pane narrates the round that
+                is live, the page argues the scoring rule at length. */}
+            <Group label="PROTOCOL">
+              <RailLink href="/how" label="How it works" active={active("/how")} icon={<path d="M5 3h8l3 3v12H5zM13 3v3h3M8 11h5M8 14h5" />} />
+              <RailLink href="/docs" label="The scoring rule" active={active("/docs")} icon={<path d="M10 3a7 7 0 100 14 7 7 0 000-14zM10 14h.01M10 7v4" />} />
             </Group>
           </div>
 

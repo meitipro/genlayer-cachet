@@ -15,6 +15,34 @@ export const metadata: Metadata = {
     "The scoring rule, the appeal path, where the score stops, and what a gasless test network establishes.",
 };
 
+/** The scoring flow, as steps. It used to be four paragraphs of prose. */
+const SCORING_STEPS = [
+  {
+    title: "A leader proposes",
+    body: "One validator reads the revealed proposal against the published criteria and proposes a score from 0 to 5 for each, with a one-line reason pointing at the part of the text it used.",
+  },
+  {
+    title: "Every other validator scores it independently",
+    body: "They do not see the leader's answer first. Each grades the same proposal against the same criteria on its own, which is what makes the comparison worth anything.",
+  },
+  {
+    title: "The answers are compared",
+    body: "The criterion set must match exactly and each score may differ by at most one step. Agreement keeps the leader's answer; disagreement rotates the leader and tries again with a different model.",
+  },
+  {
+    title: "The contract does the arithmetic",
+    body: "Once the per-criterion scores are agreed, the contract multiplies each by the buyer's published weight and adds them up. No model is ever asked for the total.",
+  },
+];
+
+/** What stops a proposal written to game the scorer. */
+const SCORING_DEFENCES = [
+  "Every angle bracket in a proposal is neutralised, so it cannot close the tag that holds it and impersonate the criteria.",
+  "A proposal that asks for a particular score, claims to be the best, or addresses the scorer directly is scored zero on every criterion.",
+  "Claims are treated as claims: an unevidenced claim scores lower than an evidenced one.",
+  "Scores must be integers in range, one per criterion, with matching indices. A missing criterion is an error rather than a silent zero.",
+];
+
 const SECTIONS = [
   ["scoring", "How scoring reaches agreement"],
   ["appeal", "The appeal path"],
@@ -77,54 +105,109 @@ export default async function DocsPage() {
         <div className="shell">
           <div className="eyebrow-row">
             <div className="eyebrow">How scoring reaches agreement</div>
-            <div className="eyebrow-note">optimistic democracy</div>
+            <div className="eyebrow-note">four steps, then arithmetic</div>
           </div>
-          <div className="prose" style={{ maxWidth: "72ch" }}>
-            <p>
-              A leader proposes a score from 0 to {LIMITS.scoreMax} for each published criterion,
-              with a one-line reason for each. Every other validator independently scores the same
-              proposal against the same criteria, and then compares.
-            </p>
-            <h3>The agreement rule</h3>
-            <p>
-              The criterion set must match exactly, and each score may differ by at most one step.
-              The reasons are excluded from the comparison - two honest nodes word the same
-              observation differently, and putting free prose under an equality check is the
-              fastest way to turn a working scoring path into permanent disagreement.
-            </p>
-            <p>
-              Asking two nodes for the same <em>total</em> would fail on the rounding of judgment.
-              Agreeing per criterion within one step and then summing deterministically keeps the
-              ranking stable without pretending that scoring is exact.
-            </p>
-            <h3>The total is never proposed by a model</h3>
-            <p>
-              Weights never enter the prompt. The model is not told that criterion one counts
-              three times, so a proposal cannot argue about how heavily anything counts. Once the
-              per-criterion scores are agreed, the contract multiplies and adds them in ordinary
-              deterministic code.
-            </p>
-            <h3>When the network cannot agree</h3>
-            <p>
-              A bid that cannot be agreed on is left unscored and the round pauses rather than
-              awarding around it. Awarding while one bid is unscored would mean somebody won by
-              being the only bid the network could read, so the contract refuses. Scoring is
-              permissionless and keyed on status: a rerun after a leader stalls cannot score a bid
-              twice.
-            </p>
-            <p>
-              Two validators never agree on a malformed model answer. Agreeing would write
-              &ldquo;the scoring failed&rdquo; into a tender as though it were a finding;
-              disagreeing rotates the leader and tries again with a different model. That is what
-              the diversity of the validator set is for.
-            </p>
-            <h3>What defends against a proposal written to game it</h3>
-            <ul>
-              <li>The proposal is wrapped in tags, and the criteria state it is a submission and never an instruction.</li>
-              <li>A proposal that asks for a particular score, claims to be the best, or addresses the scorer directly is scored zero on every criterion.</li>
-              <li>Claims are treated as claims: an unevidenced claim scores lower than an evidenced one.</li>
-              <li>Scores are integers in range with a required index match, and every criterion must receive exactly one - a missing criterion is an error, not a silent zero.</li>
-            </ul>
+
+          <p className="lede" style={{ maxWidth: "62ch", marginBottom: 28 }}>
+            Nobody is trusted to hand down a score. Several validators grade the same proposal
+            against the same published criteria, separately, and the network keeps the answer
+            only if enough of them independently agree on it.
+          </p>
+
+          {/* The flow as steps rather than paragraphs, in the same shape as the
+              protocol timeline in the dApp so the two read as one idea. */}
+          <ol className="how-steps" style={{ marginBottom: 30 }}>
+            {SCORING_STEPS.map((s, i) => (
+              <li key={s.title} className="how-step">
+                <div className="how-rail" aria-hidden="true">
+                  <span className="how-icon mono" style={{ fontSize: 12 }}>{i + 1}</span>
+                  {i < SCORING_STEPS.length - 1 ? <span className="how-line" /> : null}
+                </div>
+                <div className="how-body">
+                  <div className="how-top">
+                    <h3 className="how-title">{s.title}</h3>
+                  </div>
+                  <p className="how-text">{s.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          {/* What agreement requires. This was three paragraphs and it is four rules. */}
+          <div className="panel scroller" style={{ marginBottom: 22 }}>
+            <div className="panel-head">
+              <span className="label">The agreement rule</span>
+              <span className="label">per bid</span>
+            </div>
+            <table className="rule-table">
+              <thead>
+                <tr>
+                  <th>What is compared</th>
+                  <th>May differ by</th>
+                  <th>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>The set of criteria</td>
+                  <td><b>Nothing</b></td>
+                  <td>A missing criterion is an error, not a silent zero.</td>
+                </tr>
+                <tr>
+                  <td>Each score</td>
+                  <td><b>One step</b></td>
+                  <td>Two honest readers can land a point apart. Demanding an exact match would stall on the rounding of judgment.</td>
+                </tr>
+                <tr>
+                  <td>The written reasons</td>
+                  <td><b>Not compared</b></td>
+                  <td>Two nodes word the same observation differently. Putting free prose under an equality check is the fastest way to make scoring never settle.</td>
+                </tr>
+                <tr>
+                  <td>The weighted total</td>
+                  <td><b>Never proposed</b></td>
+                  <td>Weights never enter the prompt. The contract multiplies and adds the agreed scores in ordinary deterministic code.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-auto-290">
+            <div className="panel">
+              <div className="panel-head">
+                <span className="label">When the network cannot agree</span>
+              </div>
+              <div className="panel-body">
+                <p className="how-text">
+                  The bid is left unscored and the round pauses rather than awarding around it.
+                  Awarding while one bid is unscored would mean somebody won by being the only
+                  bid the network could read, so the contract refuses.
+                </p>
+                <p className="how-text" style={{ marginTop: 12 }}>
+                  Two validators never agree on a malformed answer either. Agreeing would write
+                  &ldquo;the scoring failed&rdquo; into a tender as though it were a finding;
+                  disagreeing rotates the leader and tries again with a different model.
+                </p>
+              </div>
+            </div>
+
+            <div className="panel">
+              <div className="panel-head">
+                <span className="label">Against a proposal written to game it</span>
+              </div>
+              <div className="panel-body">
+                <ul className="how-rules">
+                  {SCORING_DEFENCES.map((d) => (
+                    <li key={d}>
+                      <svg width="15" height="15" viewBox="0 0 21 21" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 11l4 4 9-9" />
+                      </svg>
+                      <span>{d}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </section>

@@ -2786,3 +2786,46 @@ textarea {
 .how-step.is-now .how-icon {
   animation: now-pulse 2.6s ease-in-out infinite;
 }
+
+/* The agreement rule, as a table. Three paragraphs of prose became four rows,
+   which is what they always were. */
+.rule-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+}
+
+.rule-table th,
+.rule-table td {
+  padding: 12px 22px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--note-fg);
+}
+
+.rule-table th {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--label-fg);
+  white-space: nowrap;
+}
+
+.rule-table td:first-child {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.rule-table td b {
+  color: var(--accent-fg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rule-table tr:last-child td {
+  border-bottom: 0;
+}

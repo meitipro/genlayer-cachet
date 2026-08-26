@@ -888,6 +888,66 @@ def test_bidder_view_reports_the_latest_row():
     check("and it is reported as sealed", live["status"], "sealed")
 
 
+def test_the_contract_publishes_its_own_version():
+    """
+    So "is this address running the source in the repo?" is a question the
+    chain can answer, rather than one you take on trust from whoever pasted
+    the address. It has already been the wrong answer here once.
+    """
+    c = new_contract()
+    terms = json.loads(c.terms())
+    check("terms carries a version", terms["version"], C.VERSION)
+    check("and it is not empty", len(str(C.VERSION)) > 0, True)
+
+
+def test_ownership_can_move_but_not_vanish():
+    """
+    Without a transfer the deploying key is the owner forever, and losing it
+    freezes the fee, the deposits and the treasury on a contract otherwise
+    built so nothing gets stuck.
+    """
+    c = new_contract()
+    check("the deployer starts as owner", json.loads(c.terms())["owner"], BUYER)
+
+    at(ALICE, 0, "2026-08-08T01:00:00Z")
+    refuses(
+        "a stranger cannot take ownership",
+        lambda: c.transfer_ownership(ALICE),
+        "only the owner",
+    )
+
+    at(BUYER, 0, "2026-08-08T01:00:00Z")
+    refuses(
+        "ownership cannot be handed to nobody",
+        lambda: c.transfer_ownership("0x" + "00" * 20),
+        "cannot be handed to nobody",
+    )
+    refuses(
+        "nor to the address that already holds it",
+        lambda: c.transfer_ownership(BUYER),
+        "already the owner",
+    )
+    refuses(
+        "nor to something that is not an address",
+        lambda: c.transfer_ownership("not-an-address"),
+        "address",
+    )
+
+    c.transfer_ownership(ALICE)
+    check("ownership moved", json.loads(c.terms())["owner"], ALICE)
+
+    # And the old owner really has lost the role, rather than sharing it.
+    at(BUYER, 0, "2026-08-08T02:00:00Z")
+    refuses(
+        "the previous owner can no longer set the terms",
+        lambda: c.set_treasury(BUYER),
+        "only the owner",
+    )
+    at(ALICE, 0, "2026-08-08T02:00:00Z")
+    c.set_treasury(ALICE)
+    check("the new owner can", json.loads(c.terms())["treasury"], ALICE)
+
+
 def test_counters_never_go_negative():
     c = new_contract()
     c._bump(c.bidder_withdrawn, ALICE.lower(), -5)

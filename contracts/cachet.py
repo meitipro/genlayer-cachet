@@ -38,6 +38,22 @@ from dataclasses import dataclass
 # message at all.
 # --------------------------------------------------------------------------
 
+VERSION = "3"
+"""
+Which revision of THIS source a deployed address is running.
+
+Bumped whenever the rules change - a new method, a different refusal, a
+changed window. Published by `terms`, so "is the contract at this address the
+one in the repo?" can be answered by asking it rather than by trusting whoever
+pasted the address.
+
+That question has already come up here: an address was live while the source
+moved two review passes ahead of it, and nothing on chain said so.
+`npm run verify` compares this against the repo and stops when they disagree.
+"""
+
+ZERO_ADDRESS = "0x" + "00" * 20
+
 ERROR_EXPECTED = "[EXPECTED]"
 ERROR_TRANSIENT = "[TRANSIENT]"
 ERROR_LLM = "[LLM_ERROR]"
@@ -2013,6 +2029,32 @@ class Contract(gl.Contract):
         self.appeal_bond = u256(appeal_bond)
 
     @gl.public.write
+    def transfer_ownership(self, new_owner: str) -> None:
+        """
+        Hand the owner role to another address.
+
+        Without this the deploying key is the owner for as long as the contract
+        exists, and losing it freezes the fee, the deposit, the bond and the
+        treasury at whatever they were - on a contract otherwise built so that
+        nothing gets stuck.
+
+        The zero address is refused. Renouncing is a different decision with
+        different consequences and it is not this method in disguise: it would
+        leave a live contract whose terms can never be corrected again, which
+        is not somewhere to arrive by passing a confusing argument.
+        """
+        if gl.message.sender_address != self.owner:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} only the owner may do this")
+        if not is_address(new_owner):
+            raise gl.vm.UserError(ERR_BAD_ADDRESS)
+        nominee = Address(new_owner)
+        if nominee.as_hex.lower() == ZERO_ADDRESS:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} ownership cannot be handed to nobody")
+        if nominee == self.owner:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} that address is already the owner")
+        self.owner = nominee
+
+    @gl.public.write
     def set_treasury(self, treasury: str) -> None:
         if gl.message.sender_address != self.owner:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} only the owner may do this")
@@ -2030,6 +2072,7 @@ class Contract(gl.Contract):
     def terms(self) -> str:
         return json.dumps(
             {
+                "version": VERSION,
                 "owner": self.owner.as_hex,
                 "treasury": self.treasury.as_hex,
                 "fee_bps": int(self.fee_bps),

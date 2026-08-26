@@ -261,6 +261,35 @@ withdrawn one, and among equals the later wins". The code implemented the first
 half only, so a bidder who committed and withdrew twice was reported at row 0 -
 linking to the older cancellation and dating their involvement to the wrong one.
 
+## Found on a fourth pass, taking from two sibling contracts
+
+Two gaps that neither a test nor a review of this file alone would surface,
+because both are about what happens to a contract AFTER it is deployed. Both
+come from GenLayer contracts that had already solved them.
+
+**12. Nothing on chain said which source an address was running.** Unison
+publishes a `RUBRIC_VERSION` in a view, and the reason is the exact situation
+this project had already reached: an address was live while the source moved
+two review passes ahead of it, and the only record of that was a comment in a
+gitignored env file. `VERSION` is now published by `terms`, and `npm run
+verify` compares it against the repo and refuses to check anything else when
+they disagree - because every check below that would be describing a different
+contract.
+
+**13. The owner role could not move.** Fieldwork has `transfer_ownership`;
+this had only `set_terms` and `set_treasury`, both owner-gated, and no way to
+change who the owner is. So losing the deploying key froze the fee, the entry
+deposit, the appeal bond and the treasury address permanently - on a contract
+built end to end so that nothing else gets stuck. Escrow can always leave, a
+bidder can always claim, a round that cannot be awarded can always be expired,
+and yet the parameters had a single point of failure with no recovery.
+
+`transfer_ownership` refuses the zero address. Renouncing ownership is a
+different decision with different consequences and it is not this method
+wearing a disguise: it would leave a live contract whose terms can never be
+corrected again, which is not somewhere anybody should arrive by passing an
+unusual argument to a method that sounds like it does something else.
+
 ## Design corrections that are not bug fixes
 
 **Award is permissionless after the decision window.** The brief never says who

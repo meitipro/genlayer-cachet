@@ -14,6 +14,7 @@
     "test:ui": "node --test lib/*.test.ts",
     "check": "node scripts/check.mjs",
     "deploy": "node scripts/deploy.mjs",
+    "verify": "node scripts/verify.mjs",
     "seed": "node scripts/seed.mjs",
     "status": "node scripts/status.mjs",
     "settle": "node scripts/settle.mjs",

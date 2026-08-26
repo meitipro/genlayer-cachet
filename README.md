@@ -107,6 +107,9 @@ was scored on its merits rather than merely relative to it.
 
 ## Running it
 
+Publishing it is [DEPLOY.md](DEPLOY.md) - deploy, verify, seed, point the site
+at it, and what changes on a live network.
+
 ```bash
 npm install
 npm run dev          # http://localhost:4100
@@ -124,11 +127,12 @@ like a real one.
 | `npm run dev` | dev server on port 4100 |
 | `npm run build` | production build - **stop the dev server first**, a concurrent build corrupts `.next` and every route 500s |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | 387 checks: 41 browser, 244 pure helpers, 102 driving the contract as a state machine. No GenVM, no network |
+| `npm test` | 428 checks: 41 browser, 244 pure helpers, 143 driving the contract as a state machine. No GenVM, no network |
 | `npm run test:ui` | just the browser half - formatting, and the two hashes shared with the contract |
 | `npm run test:contract` | just the contract: pure helpers, then commit/amend/withdraw/claim/sweep against a storage stub |
 | `npm run check -- --validate` | `genvm-lint` lint + validate + schema |
 | `npm run deploy -- --yes --fund` | deploy to the configured network |
+| `npm run verify -- --address=0x...` | prove a DEPLOYED contract works, read-only and free. Checks the published `VERSION` against this repo first, and stops if they disagree |
 | `npm run seed -- --address=0x... --yes` | drive real tenders through it, resumably |
 | `npm run injection -- --address=0x... --yes` | run a round where one bid is a prompt-injection attempt, and publish both scorecards |
 | `npm run bidder -- --address=0x... --yes` | prove amend, withdraw, the clarifications and the bidder record on a live network, in minutes |

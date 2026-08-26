@@ -125,6 +125,8 @@ export interface Stats {
 }
 
 export interface Terms {
+  /** Which revision of contracts/cachet.py this deployment is running. */
+  version: string;
   owner: string;
   treasury: string;
   fee_bps: number;

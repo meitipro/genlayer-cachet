@@ -84,6 +84,13 @@ const WRITES: Method[] = [
   { name: "expire", args: "round_id", note: "Abandons a round that cannot be awarded, so escrow is never stranded." },
   { name: "sweep", args: "round_id", note: "Marks bids that were never revealed, so the record matches reality." },
   { name: "claim", args: "round_id, bid_index", note: "Each bidder pulls what they are owed. Nothing is pushed." },
+  {
+    name: "transfer_ownership",
+    args: "new_owner",
+    note: "Owner only. Refuses the zero address, so the role cannot be dropped by accident.",
+  },
+  { name: "set_terms", args: "fee_bps, entry_deposit, appeal_bond", note: "Owner only, and it never reaches a round that already exists." },
+  { name: "set_treasury", args: "treasury", note: "Owner only. Where the award fee is sent." },
 ];
 
 const READS: Method[] = [
@@ -136,9 +143,12 @@ export default async function ContractPage() {
             On {NETWORK_LABEL}.{" "}
             {terms ? (
               <>
-                An entry deposit is {formatGen(terms.entry_deposit)} GEN, an appeal bond is{" "}
+                Source version <b>{terms.version}</b>. An entry deposit is{" "}
+                {formatGen(terms.entry_deposit)} GEN, an appeal bond is{" "}
                 {formatGen(terms.appeal_bond)} GEN, and the award fee is {terms.fee_bps / 100}% -
-                read from the contract, not from this page.
+                all read from the contract, not from this page. Run{" "}
+                <code className="mono">npm run verify</code> to check this deployment against
+                the source in the repo.
               </>
             ) : (
               <>The terms could not be read just now.</>

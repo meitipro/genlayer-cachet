@@ -41,7 +41,7 @@ const STAGES: Stage[] = [
   {
     n: "01",
     title: "Publish the tender",
-    body: "The buyer writes the scope, budget, criteria and their weights on chain, then opens the round. Once published, none of it can be edited - every bidder reads the same brief.",
+    body: "The buyer writes the scope, budget, criteria and their weights on-chain, then opens the round. Once published, none of it can be edited - every bidder reads the same brief.",
     icon: "M5 3h8l3 3v12H5zM13 3v3h3M8 11h5M8 14h5",
   },
   {
@@ -65,7 +65,13 @@ const STAGES: Stage[] = [
   {
     n: "05",
     title: "Award, then appeal",
-    body: "The highest weighted total takes the contract. While the round is still open any bidder can bond GEN to have their own scorecard re-read, in front of a fresh set of validators.",
+    // The design reads "escrow releases on the milestones" and "for six days
+    // after". This contract has no milestones - the winner is paid the budget
+    // less the fee in one transfer on award - and the appeal window is bounded
+    // by the round still being open rather than by a fixed six days. Those two
+    // clauses are corrected and the rest is the design's own sentence.
+    body:
+      "The highest score takes the contract and escrow releases to the winner on award. For as long as the round stays open, any bidder can bond GEN to have a single criterion re-scored by a fresh validator set.",
     icon: "M10.5 3l2.3 4.7 5.2.8-3.8 3.6.9 5.1-4.6-2.4-4.6 2.4.9-5.1L3 8.5l5.2-.8z",
   },
 ];
@@ -170,7 +176,7 @@ export default async function HowPage() {
                         <span className="how-n mono">{s.n}</span>
                         <h3 className="how-title">{s.title}</h3>
                         {state === "done" ? (
-                          <span className="how-badge done">PASSED</span>
+                          <span className="how-badge done">SETTLED</span>
                         ) : state === "now" && live ? (
                           <span className="how-badge now">ROUND {live.id} IS HERE</span>
                         ) : state === "ahead" ? (

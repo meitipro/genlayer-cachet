@@ -2677,3 +2677,112 @@ canvas {
   margin-top: 2px;
   color: var(--accent-fg);
 }
+
+/* ==========================================================================
+   Motion
+   ==========================================================================
+
+   The site had four transitions in the whole stylesheet, so every control
+   changed state by jumping. This is the layer that makes it feel continuous.
+
+   Every rule here is neutralised by the `prefers-reduced-motion` block near the
+   top of this file, which zeroes animation and transition durations globally -
+   so nothing below needs to repeat that guard, and nothing below can escape it.
+
+   Durations are deliberately short. 120-220ms is the band where a change reads
+   as "the thing moved" rather than "the page is thinking about it"; past about
+   300ms an interface starts feeling slow precisely because it was trying to
+   feel smooth. */
+
+/* A pane arriving. Same easing family as the landing's entrance, one beat
+   quieter, because this happens on every navigation rather than once. */
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.view-pane {
+  animation: pane-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Anything you can press or follow. `transform` is included so a press has
+   somewhere to go, and `box-shadow` so a focus ring grows rather than snaps. */
+a,
+button,
+.btn,
+.card,
+.panel,
+.stat-card,
+input,
+select,
+textarea {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 160ms ease,
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* A press should be felt. Small, because a button that travels is a toy. */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Rows and cards lift a little under the pointer, and only where a pointer
+   actually exists - on touch there is no hover state to leave, so the lift
+   would stick after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  .card:hover,
+  .stat-card:hover,
+  .needs-list li:hover,
+  .escrow-list li:hover,
+  .mine-list li:hover,
+  .method-list li:hover {
+    border-color: var(--line-strong, var(--rule));
+    transform: translateY(-1px);
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+}
+
+/* The rail. The handoff gives its links a hover fill; this is that, plus the
+   same easing everything else uses so the whole shell moves as one piece. */
+#apprail a {
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+/* Focus is the one state that must never be subtle. It gets the same easing
+   as everything else, and a ring that is visible on every surface. */
+:focus-visible {
+  outline: 2px solid var(--accent-fg);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* The timeline's live stage breathes, very slightly, so the eye finds it
+   without a colour change doing all the work. */
+@keyframes now-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(196, 71, 46, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(196, 71, 46, 0);
+  }
+}
+
+.how-step.is-now .how-icon {
+  animation: now-pulse 2.6s ease-in-out infinite;
+}

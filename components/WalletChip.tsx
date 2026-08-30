@@ -86,20 +86,28 @@ export default function WalletChip() {
     setFunding(true);
     setNote("");
     try {
-      const before = (await balanceOf(address)) ?? 0n;
+      // NOT `?? 0n`. A failed pre-read is not a zero balance, and treating it
+      // as one made every later reading look like a credit: `after > before`
+      // is true for any funded account the moment the node answers again, so
+      // the chip would report GEN arriving that the faucet never sent.
+      const before = await balanceOf(address);
       await requestFunds(address, FAUCET_GEN);
 
       let after = before;
-      for (let attempt = 0; attempt < 4 && after <= before; attempt += 1) {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        if (before !== null && after !== null && after > before) break;
         await new Promise((r) => setTimeout(r, 1200));
-        after = (await balanceOf(address)) ?? before;
+        const reading = await balanceOf(address);
+        if (reading !== null) after = reading;
       }
       await wallet.refreshBalance();
 
       setNote(
-        after > before
-          ? `${formatUnits(after - before)} ${SYMBOL} credited.`
-          : `The faucet accepted the request, but this balance has not moved. ${NETWORK_LABEL} only funds accounts its ledger already knows.`,
+        before === null || after === null
+          ? `The faucet accepted the request. This balance could not be read, so whether it moved is not something this page can tell you - check your wallet.`
+          : after > before
+            ? `${formatUnits(after - before)} ${SYMBOL} credited.`
+            : `The faucet accepted the request, but this balance has not moved. ${NETWORK_LABEL} only funds accounts its ledger already knows.`,
       );
     } catch (e) {
       setNote(readableError(e));

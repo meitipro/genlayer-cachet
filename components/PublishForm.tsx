@@ -160,6 +160,8 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
     setMessage("");
     setFailed(false);
     setVerdict(null);
+    // Whether the write left. See the catch at the bottom of this callback.
+    let sent = false;
     try {
       const client = await walletClient(address);
       const digest = await criteriaDigest(texts);
@@ -191,6 +193,7 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
         args: [texts] as never[],
         value: 0n,
       })) as string;
+      sent = true;
 
       const receipt = await waitAccepted(client, hash);
 
@@ -232,7 +235,18 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
       });
     } catch (e) {
       setFailed(true);
-      setMessage(readableError(e));
+      // A throw AFTER the write left is the receipt going unread, not a
+      // refusal. It matters more here than anywhere: the verdict is final in
+      // both directions, so a buyer told their check failed when it actually
+      // landed will reword criteria that had already passed - and the original
+      // wording can then never be published at all.
+      setMessage(
+        sent
+          ? "The check was sent but its outcome could not be read. Press it again in a moment: " +
+            "a verdict that already landed is read back rather than re-asked, and costs nothing. " +
+            readableError(e)
+          : readableError(e),
+      );
     } finally {
       setChecking(false);
     }
@@ -243,6 +257,9 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
     setPublishing(true);
     setMessage("");
     setFailed(false);
+    // Whether the write left. This is the most expensive place in the app to
+    // get that wrong: publishing escrows the whole budget.
+    let sent = false;
     try {
       const client = await walletClient(address);
       if (budgetWei === null) {
@@ -269,6 +286,7 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
         ] as never[],
         value: wei,
       })) as string;
+      sent = true;
 
       const receipt = await waitAccepted(client, hash);
 
@@ -330,7 +348,20 @@ export default function PublishForm({ terms }: { terms: Terms | null }) {
       }
     } catch (e) {
       setFailed(true);
-      setMessage(readableError(e));
+      // A throw AFTER the write left is the receipt going unread, not a
+      // refusal. Reporting it as refused re-offers the button, and a second
+      // press escrows the budget a second time on a tender that already
+      // exists. Send them to the docket instead: their round is either there
+      // or it is not, and that is a question this page cannot answer but that
+      // page can.
+      setMessage(
+        sent
+          ? "The tender was sent but its outcome could not be read. Do NOT publish again yet: " +
+            "open the docket and check whether it is already there, because a second publish " +
+            "escrows the budget twice. " +
+            readableError(e)
+          : readableError(e),
+      );
     } finally {
       setPublishing(false);
     }

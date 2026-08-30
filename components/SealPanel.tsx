@@ -201,6 +201,11 @@ export default function SealPanel({
       setState("signing");
       setMessage("");
       setHash("");
+      // Held in a local, not read back from state: the catch below runs in
+      // this closure and `hash` there would still be the value from the last
+      // render. It answers the only question that matters after a throw - did
+      // this transaction leave, or not.
+      let sent = "";
       try {
         const client = await walletClient(address);
         if (kind !== "commit" && !mine) {
@@ -225,6 +230,7 @@ export default function SealPanel({
           value,
         })) as string;
 
+        sent = txHash;
         setHash(txHash);
         setState("sent");
 
@@ -254,8 +260,26 @@ export default function SealPanel({
           );
         }
       } catch (e) {
-        setState("failed");
-        setMessage(readableError(e));
+        if (sent) {
+          // THE TRANSACTION WENT OUT. Whatever threw here threw after it left,
+          // so this is the receipt going unread rather than the call being
+          // refused - the wait times out, the RPC rate limits, the tab sleeps.
+          //
+          // Calling that "failed" is the expensive mistake: the panel would
+          // re-offer the button and a reader who trusted it would commit a
+          // second time and pay a second entry deposit on a bid that had
+          // already landed. Same reasoning as the unreadable-receipt branch
+          // above, and the same answer - say neither.
+          setState("unknown");
+          setMessage(
+            "The transaction was sent but its outcome could not be read. Check the round " +
+              "page before sending this again - it may already have landed. " +
+              readableError(e),
+          );
+        } else {
+          setState("failed");
+          setMessage(readableError(e));
+        }
       }
     },
     [address, digest, mine, proposal, round.entry_deposit, round.id, router, salt],

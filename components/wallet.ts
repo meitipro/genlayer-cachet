@@ -16,6 +16,7 @@ import { createClient } from "genlayer-js";
 import { ADD_CHAIN_PARAMS, CACHET, CHAIN, CHAIN_ID_HEX, IS_LIVE, NETWORK_LABEL } from "@/lib/chain";
 import { chosenProvider, chosenRdns, forget, remember, wallets } from "./providers";
 import { balanceOf } from "@/lib/funds";
+import { readableError, WalletAccountChanged } from "@/lib/wallet-errors";
 
 type Eip1193 = {
   request: (args: { method: string; params?: unknown[] | object }) => Promise<unknown>;
@@ -110,6 +111,32 @@ function useWalletEngine() {
     return () => {
       cancelled = true;
       stop?.();
+    };
+  }, [refresh]);
+
+  /**
+   * Re-read whenever the reader comes back to this tab.
+   *
+   * `accountsChanged` is the documented signal and it is not a reliable one:
+   * switching the active account inside an extension does not always reach a
+   * site that is already connected, so the header can go on showing an account
+   * the wallet has moved off. The reader then finds out when a write is
+   * refused, which is the worst moment and the least informative message.
+   *
+   * Coming back to the tab is exactly when that has usually just happened -
+   * the reader left to change something in the extension - so it is both the
+   * cheapest and the most accurate moment to check. Two requests, only when
+   * the tab is actually looked at.
+   */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [refresh]);
 
@@ -303,6 +330,35 @@ function useWalletEngine() {
  */
 export async function walletClient(address: string) {
   const provider = await chosenProvider();
+
+  // THE ADDRESS IS RE-READ, NOT TRUSTED.
+  //
+  // `address` comes from React state that was last written when the wallet
+  // told us something. A wallet that changes accounts without firing
+  // `accountsChanged` - and they do - leaves that state stale, and the first
+  // sign of it is a write refused by the extension with a message that names
+  // neither address. Since the account decides what a commitment binds to,
+  // signing from an address this page is not showing would produce a bid that
+  // can never be revealed.
+  //
+  // So: ask, compare, and refuse to build a client that would sign as somebody
+  // else. `eth_accounts` never prompts, so this costs a round trip and no
+  // interruption.
+  if (provider) {
+    try {
+      const accounts = (await provider.request({ method: "eth_accounts" })) as string[];
+      const current = accounts?.[0];
+      if (current && current.toLowerCase() !== address.toLowerCase()) {
+        throw new WalletAccountChanged(address, current);
+      }
+    } catch (e) {
+      if (e instanceof WalletAccountChanged) throw e;
+      // A locked or unresponsive wallet answers `eth_accounts` with an error.
+      // That is not evidence of a mismatch, and the write below will surface
+      // the real problem in the wallet's own words.
+    }
+  }
+
   return createClient({
     chain: CHAIN,
     account: address as `0x${string}`,
@@ -341,17 +397,10 @@ export async function waitAccepted(
   });
 }
 
-export function readableError(e: unknown): string {
-  const err = e as { code?: number; shortMessage?: string; details?: string; message?: string };
-  if (err?.code === 4001) return "You rejected the request in your wallet.";
-  const parts = [err?.details, err?.shortMessage, err?.message].filter(Boolean) as string[];
-  const text = parts.join(" - ") || String(e);
-  if (/rate limit/i.test(text)) {
-    return "The network is rate limiting requests right now. Wait a minute and try again - nothing was sent.";
-  }
-  if (/insufficient/i.test(text)) return "That account does not hold enough GEN for this call.";
-  return text.slice(0, 300);
-}
+// Re-exported so the five screens that show a wallet error keep importing it
+// from here, next to the client that produces one. The implementation lives in
+// `lib` because it is pure, and pure things in this codebase have tests.
+export { readableError, WalletAccountChanged };
 
 type LeaderRound = {
   mode?: string;

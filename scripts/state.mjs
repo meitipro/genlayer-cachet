@@ -15,7 +15,7 @@
  * These are throwaway keys for a gasless test network, funded programmatically
  * by sim_fundAccount. The file is gitignored regardless.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,10 +26,31 @@ function load() {
   if (!existsSync(FILE)) return {};
   try {
     return JSON.parse(readFileSync(FILE, "utf8"));
-  } catch {
-    // A half-written file is not worth a crash: start over rather than refuse
-    // to run at all.
-    return {};
+  } catch (err) {
+    // NEVER start over here.
+    //
+    // This used to return {} on a parse failure, and `openState` calls save()
+    // immediately - so an unreadable file was overwritten with an empty one on
+    // the very next line. That destroyed the bidder keys and salts this file
+    // exists to protect, which is the exact outcome the header above says must
+    // not happen: a commitment whose salt is gone can never be opened, and its
+    // deposit is forfeited on a round still holding an escrowed budget.
+    //
+    // A truncated file is usually recoverable by hand, so it is copied aside
+    // before anything else touches it, and the run stops.
+    const aside = `${FILE}.corrupt-${Date.now()}`;
+    try {
+      copyFileSync(FILE, aside);
+    } catch {
+      // If even the copy fails, refusing to run is still the right answer.
+    }
+    throw new Error(
+      `${FILE} could not be parsed (${err.message}).\n` +
+        `A copy was kept at ${aside}.\n` +
+        `It holds the bidder keys and salts for sealed commitments on chain, so it is NOT\n` +
+        `safe to start over: repair it, or if this address has no live sealed bids, delete\n` +
+        `the file deliberately and re-run.`,
+    );
   }
 }
 

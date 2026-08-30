@@ -569,7 +569,17 @@ async function main() {
         return;
       }
       const out = await write(buyerClient, "score", [roundId, indexOf(name)], 0n, `score ${name}`);
-      if (!ok(out)) console.log(`      ${name}: ${out.refusal || out.status}`);
+      if (!ok(out)) {
+        console.log(`      ${name}: ${out.refusal || out.status}`);
+        // NOT done. `step` marks a step complete unless its callback returns
+        // false, so logging the refusal and falling through recorded a scoring
+        // call that never landed as finished. A resumed run then skipped it
+        // forever, leaving a revealed bid unscored on a round that `award`
+        // refuses for exactly that reason - the escrow stuck until the
+        // decision window ran out. Scoring is permissionless and retryable, so
+        // the honest answer is to leave the step open.
+        return false;
+      }
     });
   }
 

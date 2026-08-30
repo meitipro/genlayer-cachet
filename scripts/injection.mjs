@@ -222,7 +222,14 @@ async function main() {
   for (const name of order) {
     await step(`score:${name}`, async () => {
       const out = await write(buyerClient, "score", [id, order.indexOf(name)], 0n, `score ${name}`);
-      if (!ok(out)) console.log(`      ${name}: ${out.refusal}`);
+      if (!ok(out)) {
+        console.log(`      ${name}: ${out.refusal}`);
+        // Same rule as seed.mjs: `step` marks a step done unless its callback
+        // returns false, and a scoring call that never landed must not be
+        // recorded as finished. Here it would also make the run print an
+        // attacker-versus-honest comparison it never actually produced.
+        return false;
+      }
     });
   }
 

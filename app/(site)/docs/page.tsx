@@ -290,10 +290,13 @@ export default async function DocsPage() {
               become a second, unsealed bid.
             </p>
             <p>
-              <strong>How it settles.</strong> If the weighted total moves, the appeal is upheld
-              and the bond comes back. If it does not, the bond pays for the re-scoring. Either
-              way the new scorecard replaces the old one and is marked as re-scored, with the
-              previous total kept beside it.
+              <strong>How it settles.</strong> If the re-score raises the weighted total, the
+              appeal is upheld and the bond comes back. If the total holds or falls, the bond
+              pays for the re-scoring. It has to be an improvement rather than any movement,
+              because the agreement rule treats a one-step difference on a criterion as noise,
+              and a bond that noise alone could recover would not be a bond. Either way the new
+              scorecard replaces the old one and is marked as re-scored, with the previous total
+              kept beside it.
             </p>
             <p>
               <strong>Who can resolve it.</strong> Anyone. An unresolved appeal blocks the whole
@@ -538,13 +541,13 @@ export default async function DocsPage() {
               ["commit", "Payable. Takes a sha256 digest and the entry deposit. Refuses a closed window, a malformed digest, a second live bid from the same address."],
               ["amend", "Bidder only, while the commit window is open. Replaces your own digest. The count and the moment are published."],
               ["withdraw", "Bidder only, while the commit window is open. Returns the deposit, frees the slot, and lets you seal again."],
-              ["reveal", "Deterministic. Checks the digest, the windows and eligibility before anything else runs."],
+              ["reveal", "Deterministic. Checks the windows, then the lengths, then the digest. Eligibility is NOT re-checked here: it is settled once at commit, so winning some other tender in between can never strand a bid that is already sealed."],
               ["score", "Permissionless. Grades one revealed bid against the frozen criteria and sums the total in code."],
-              ["appeal_score", "Payable, bidder only. Holds the award while it is open."],
+              ["appeal_score", "Payable, bidder only, once per bid. Holds the award while it is open."],
               ["resolve_appeal", "Permissionless. Re-scores with the argument attached as a claim about the text."],
               ["award", "Buyer first, then permissionless. Refuses while any revealed bid is unscored or any appeal is open."],
-              ["decline", "Buyer only, before the decision deadline. Returns the budget."],
-              ["expire", "Permissionless after the deadline when no bid was scored. Returns the budget."],
+              ["decline", "Buyer only, after reveals close and before the decision deadline. Returns the budget and every deposit a bidder who turned up had paid."],
+              ["expire", "Permissionless after the decision deadline, on a round that cannot be awarded. Refuses while an appeal is open, because resolving one is permissionless and an unresolved appeal is not a dead end. Returns the budget."],
               ["claim", "Pull a deposit or an upheld appeal bond. Pull rather than push, so one failing transfer cannot hold up a settlement. A withdrawn bid can claim immediately."],
               ["sweep", "Permissionless. Marks commitments that were never opened as expired."],
             ].map(([name, body]) => (

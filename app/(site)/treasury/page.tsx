@@ -35,7 +35,13 @@ export default async function TreasuryPage() {
   const now = Date.now();
   // Escrow is held while a round is unsettled, which is exactly the rounds
   // that are not awarded or declined.
-  const holding = (page?.rounds ?? []).filter((r) => r.status === "open");
+  //
+  // `page` is null when the docket could not be read, and that is NOT the same
+  // as no round holding a budget. Flattening the two put "No round is holding
+  // a budget" directly beneath a non-zero escrow figure, which is the page
+  // contradicting itself in the one place it exists to be trusted.
+  const roundsUnread = page === null;
+  const holding = roundsUnread ? [] : page.rounds.filter((r) => r.status === "open");
 
   return (
     <div className="shell view-pane">
@@ -58,7 +64,12 @@ export default async function TreasuryPage() {
           <span className="label">LOCKED UNTIL SETTLEMENT</span>
         </div>
         <div className="panel-body">
-          {holding.length === 0 ? (
+          {roundsUnread ? (
+            <p className="empty-line">
+              The docket could not be read just now, so which rounds are holding the figure above
+              cannot be shown. The total itself came from the contract and is current.
+            </p>
+          ) : holding.length === 0 ? (
             <p className="empty-line">
               No round is holding a budget. Escrow appears here from the moment a tender is
               published until it is awarded or declined.

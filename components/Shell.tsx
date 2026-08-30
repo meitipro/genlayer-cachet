@@ -79,8 +79,14 @@ export function Footer() {
           </div>
 
           <div className="footer-col">
+            {/*
+              Named for what the column holds rather than for what the product
+              lacks. Every link below explains a mechanism - where the score
+              stops, how an appeal runs, how agreement is reached - and a
+              heading that framed them as an apology sold each one short.
+            */}
             <div className="label" style={{ marginBottom: 18 }}>
-              Honest limits
+              How the mark is made
             </div>
             <ul>
               <li>

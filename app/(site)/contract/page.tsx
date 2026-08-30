@@ -59,8 +59,8 @@ const WRITES: Method[] = [
   },
   {
     name: "reveal",
-    args: "round_id, bid_index, proposal, salt",
-    note: "Refused unless the hash of address, proposal and salt matches what was sealed.",
+    args: "round_id, bid_index, salt, proposal",
+    note: "Refused unless the hash of address, proposal and salt matches what was sealed. Eligibility is not re-checked, so a bid sealed in good faith can always be opened.",
   },
   {
     name: "score",
@@ -70,7 +70,7 @@ const WRITES: Method[] = [
   {
     name: "appeal_score",
     args: "round_id, bid_index, argument",
-    note: "Once per bid, by its own bidder, against a bond forfeited if the total does not move.",
+    note: "Once per bid, by its own bidder, against a bond forfeited unless the re-score raises the total.",
   },
   {
     name: "resolve_appeal",
@@ -80,10 +80,23 @@ const WRITES: Method[] = [
   { name: "ask", args: "round_id, question", note: "Open to any address. Closes with the commit window." },
   { name: "answer", args: "round_id, question_index, reply", note: "Buyer only, once, and closes with the commit window." },
   { name: "award", args: "round_id", note: "Buyer first, then anyone once the decision window has passed." },
-  { name: "decline", args: "round_id, reason", note: "Returns the budget and every deposit. Never charges the fee." },
-  { name: "expire", args: "round_id", note: "Abandons a round that cannot be awarded, so escrow is never stranded." },
+  {
+    name: "decline",
+    args: "round_id, why",
+    note: "Returns the budget, and the deposit of every bidder who turned up. A commitment nobody ever opened still forfeits. Never charges the fee.",
+  },
+  {
+    name: "expire",
+    args: "round_id",
+    note: "Abandons a round that cannot be awarded, so escrow is never stranded. Refuses while an appeal is open: resolving one is permissionless, so that is not a dead end.",
+  },
   { name: "sweep", args: "round_id", note: "Marks bids that were never revealed, so the record matches reality." },
   { name: "claim", args: "round_id, bid_index", note: "Each bidder pulls what they are owed. Nothing is pushed." },
+  {
+    name: "collect_forfeits",
+    args: "round_id",
+    note: "Permissionless. Sends the deposits of bidders who never revealed to the treasury, which is what pays for scoring the bids that did arrive.",
+  },
   {
     name: "transfer_ownership",
     args: "new_owner",
@@ -96,6 +109,12 @@ const WRITES: Method[] = [
 const READS: Method[] = [
   { name: "terms", args: "", note: "Fees, deposits and every published limit." },
   { name: "stats", args: "", note: "Running totals: rounds, bids, escrow, payouts." },
+  {
+    name: "check",
+    args: "digest",
+    note: "The stored scorability verdict for a criteria set. Read before publishing, so wording already judged is never re-asked.",
+    href: "/publish",
+  },
   { name: "rounds_page", args: "offset, limit", note: "A page of rounds, newest first.", href: "/rounds" },
   { name: "round", args: "round_id", note: "One round with its frozen criteria and weights." },
   { name: "bids", args: "round_id", note: "Every scorecard, proposals cut to a preview." },

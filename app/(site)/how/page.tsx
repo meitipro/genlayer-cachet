@@ -65,13 +65,22 @@ const STAGES: Stage[] = [
   {
     n: "05",
     title: "Award, then appeal",
-    // The design reads "escrow releases on the milestones" and "for six days
-    // after". This contract has no milestones - the winner is paid the budget
-    // less the fee in one transfer on award - and the appeal window is bounded
-    // by the round still being open rather than by a fixed six days. Those two
-    // clauses are corrected and the rest is the design's own sentence.
+    // The design reads "escrow releases on the milestones", "for six days
+    // after", and "any bidder can bond GEN to have a single criterion
+    // re-scored". Four clauses are corrected against the contract and the rest
+    // is the design's own sentence:
+    //
+    //   no milestones      the winner is paid the budget less the fee in one
+    //                      transfer on award
+    //   not six days       the appeal window is bounded by the round still
+    //                      being open, which is what `appeal_score` checks
+    //   not any bidder     `ERR_NOT_BIDDER` - only the bid's own bidder, and
+    //                      `ERR_APPEAL_TWICE` - once per bid
+    //   not one criterion  `resolve_appeal` re-scores the whole card against
+    //                      every criterion, with the argument attached as a
+    //                      claim about the text
     body:
-      "The highest score takes the contract and escrow releases to the winner on award. For as long as the round stays open, any bidder can bond GEN to have a single criterion re-scored by a fresh validator set.",
+      "The highest score takes the contract and escrow releases to the winner on award. For as long as the round stays open, a bidder can bond GEN once to have their own card re-scored by a fresh validator set, with their argument in front of it.",
     icon: "M10.5 3l2.3 4.7 5.2.8-3.8 3.6.9 5.1-4.6-2.4-4.6 2.4.9-5.1L3 8.5l5.2-.8z",
   },
 ];

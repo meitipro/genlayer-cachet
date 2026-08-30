@@ -64,7 +64,22 @@ export default async function RoundPage({ params }: Props) {
   const questions =
     round.questions > 0 || phase === "commit" ? await getQuestions(round.id) : [];
   const ranked = scoredBids(rows);
-  const winner = ranked[0] ?? null;
+  // LEADING IS NOT WINNING.
+  //
+  // `ranked[0]` is whichever scored bid is top at this instant, on any round -
+  // including one still taking bids, and one that was declined. Passing that
+  // straight through as the winner put an AWARDED tag on a bid the chain had
+  // not awarded anything to, on a site whose entire claim is that it reports
+  // what the contract says.
+  //
+  // The winner is the address the contract recorded, and only once it has.
+  const leader = ranked[0] ?? null;
+  const winner =
+    round.status === "awarded"
+      ? (ranked.find(
+          (b) => b.bidder.toLowerCase() === String(round.awarded_to).toLowerCase(),
+        ) ?? leader)
+      : null;
   const unscored = rows.filter((b) => b.status === "revealed");
   const appeals = rows.filter((b) => b.appeal_status === "open");
 
@@ -338,6 +353,7 @@ export default async function RoundPage({ params }: Props) {
                   round={round}
                   bid={b}
                   winner={winner}
+                  leader={leader}
                   total={ranked.length}
                 />
               ))}
@@ -608,14 +624,19 @@ function BidBlock({
   round,
   bid,
   winner,
+  leader,
   total,
 }: {
   round: Round;
   bid: Bid;
+  /** Only set once the contract has actually awarded this round. */
   winner: Bid | null;
+  /** Top scored bid right now, on any round. Used only for the comparison. */
+  leader: Bid | null;
   total: number;
 }) {
-  const isWinner = winner?.i === bid.i;
+  const isWinner = winner !== null && winner.i === bid.i;
+  const isLeader = leader !== null && leader.i === bid.i;
   return (
     <div className="card" style={{ boxShadow: "none" }}>
       <div className="chrome">
@@ -655,9 +676,11 @@ function BidBlock({
       <Scorecard
         criteria={round.criteria}
         left={bid}
-        right={!isWinner && winner ? winner : null}
+        // Compared against the winner once there is one, and against whoever
+        // is top otherwise. Never against itself.
+        right={!isLeader && leader ? leader : null}
         leftLabel={isWinner ? "This bid" : `Bid ${bid.i + 1}`}
-        rightLabel="Winning bid"
+        rightLabel={winner ? "Winning bid" : "Leading bid"}
         bidCount={total}
         awardedTo={round.status === "awarded" ? round.awarded_to : undefined}
       />

@@ -16,6 +16,13 @@ import { ORIGIN } from "@/lib/chain";
  * AND IT NEVER FAILS THE BUILD. If the chain cannot be read, this returns the
  * static routes alone rather than throwing - a sitemap is a hint to a crawler,
  * and no hint is worth a broken deploy.
+ *
+ * Two of the app's own panes are left out on purpose rather than by oversight.
+ * `/exhibit` is a redirect to whichever round was awarded last, and a redirect
+ * listed in a sitemap is reported back as an indexing error rather than
+ * followed. `/my-bids` renders nothing without a connected wallet, so a
+ * crawler would only ever see the empty shell - it is marked noindex at the
+ * page instead.
  */
 export const revalidate = 3600;
 
@@ -25,8 +32,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${ORIGIN}/`, lastModified: now, changeFrequency: "hourly", priority: 1 },
     { url: `${ORIGIN}/rounds`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
+    { url: `${ORIGIN}/app`, lastModified: now, changeFrequency: "hourly", priority: 0.8 },
     { url: `${ORIGIN}/publish`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${ORIGIN}/how`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${ORIGIN}/docs`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${ORIGIN}/contract`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${ORIGIN}/scorecards`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
+    { url: `${ORIGIN}/treasury`, lastModified: now, changeFrequency: "daily", priority: 0.5 },
   ];
 
   let rounds: MetadataRoute.Sitemap = [];

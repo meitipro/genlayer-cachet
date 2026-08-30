@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="public/brand/mark-256.png" width="96" height="96" alt="">
+
 # Cachet
 
 **Sealed proposal tendering.**
@@ -8,14 +10,18 @@ A buyer freezes weighted criteria on chain and escrows the budget. Bidders
 commit a sha256 of their proposal, reveal after the window shuts, and the
 network scores every revealed bid against those exact criteria.
 
-[![Built by InferNode](https://img.shields.io/badge/built%20by-InferNode-7ac943?style=flat-square)](https://github.com/meitipro)
+[![Live at cachets.xyz](https://img.shields.io/badge/live-cachets.xyz-7ac943?style=flat-square)](https://cachets.xyz)
+[![Built by InferNode](https://img.shields.io/badge/built%20by-InferNode-101216?style=flat-square)](https://github.com/meitipro)
 [![GenLayer](https://img.shields.io/badge/GenLayer-Intelligent%20Contract-101216?style=flat-square)](https://genlayer.com)
 [![Next.js 14](https://img.shields.io/badge/Next.js-14-101216?style=flat-square)](https://nextjs.org)
 [![MIT](https://img.shields.io/badge/license-MIT-101216?style=flat-square)](LICENSE)
 
-[The docket](app/(site)/rounds/page.tsx) &nbsp;-&nbsp;
-[Publish a tender](app/(site)/publish/page.tsx) &nbsp;-&nbsp;
-[How it works](app/(site)/docs/page.tsx)
+**[cachets.xyz](https://cachets.xyz)**
+
+[The docket](https://cachets.xyz/rounds) &nbsp;-&nbsp;
+[Publish a tender](https://cachets.xyz/publish) &nbsp;-&nbsp;
+[How it works](https://cachets.xyz/how) &nbsp;-&nbsp;
+[The scoring rule](https://cachets.xyz/docs)
 
 </div>
 
@@ -30,13 +36,38 @@ Series two, project 11 of 20.
 
 ---
 
+## Why this needs GenLayer
+
+The contract does not use a model as a backend. It uses one where a
+**judgement has to be settled between parties with opposite interests**.
+
+A buyer and four bidders disagree about which proposal was best. Today the
+buyer decides, alone, after reading every bid, with a standard nobody can prove
+existed beforehand - which is exactly the arrangement losing bidders distrust,
+and exactly why most of them stop entering. Here the criteria and their weights
+are written on chain before a single bid exists, every bid is sealed until the
+window shuts, and independent validators grade each revealed proposal against
+that same frozen text and have to agree before a mark is recorded.
+
+Nothing about that reduces to a deterministic API call, and nothing about it is
+safe to let one party compute. That boundary is the whole architecture:
+
+- **The contract owns** the criteria, the weights, the sealing, the scoring,
+  the appeal and the payout.
+- **The frontend owns** the forms, the salt, the countdowns and the copy. It
+  never holds a key and never sees a proposal before its reveal.
+- **The hash owns** the ordering. A commitment binds the bidder's own address,
+  so the only thing that can open a sealed bid is the text it was made from.
+
+---
+
 ## Live
 
 | | |
 | --- | --- |
 | Network | GenLayer **studionet** |
 | Contract | set `NEXT_PUBLIC_CACHET_ADDRESS` to your own deployment |
-| Contract source | [`contracts/cachet.py`](contracts/cachet.py) - 29 methods, 10 view and 19 write |
+| Contract source | [`contracts/cachet.py`](contracts/cachet.py) - 30 methods, 10 view and 20 write |
 
 `NEXT_PUBLIC_CACHET_ADDRESS` ships **empty on purpose**. Until it is set, every
 screen that would otherwise show a round says so instead. There is no sample
@@ -75,7 +106,7 @@ produced one.
 
 The contract recorded the award and emitted 39,000 GEN to the winner with a
 1,000 GEN fee (250 bps). Note that **Studio does not actually credit the payee**
-- see the honest limits below.
+- see [What Studio does differently](#what-studio-does-differently).
 
 The scoring discriminates on the text: kestrel took **0 of 5** on maintenance
 because its proposal says maintenance is not included, and 5 of 5 on the plan
@@ -107,13 +138,15 @@ was scored on its merits rather than merely relative to it.
 
 ## Running it
 
-Publishing it is [DEPLOY.md](DEPLOY.md) - deploy, verify, seed, point the site
-at it, and what changes on a live network.
-
 ```bash
 npm install
 npm run dev          # http://localhost:4100
 ```
+
+Deploying is three steps: `npm run deploy` prints an address, `npm run verify`
+proves that address answers correctly before anyone trusts it, and setting
+`NEXT_PUBLIC_CACHET_ADDRESS` to the checksummed spelling then rebuilding points
+the site at it. Each is in the table below.
 
 **There is no sample data anywhere in this codebase.** Every number on every
 screen was read from the contract, or the screen says plainly that it could not
@@ -127,7 +160,7 @@ like a real one.
 | `npm run dev` | dev server on port 4100 |
 | `npm run build` | production build - **stop the dev server first**, a concurrent build corrupts `.next` and every route 500s |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | 428 checks: 41 browser, 244 pure helpers, 143 driving the contract as a state machine. No GenVM, no network |
+| `npm test` | 478 checks: 57 browser, 244 pure helpers, 177 driving the contract as a state machine. No GenVM, no network |
 | `npm run test:ui` | just the browser half - formatting, and the two hashes shared with the contract |
 | `npm run test:contract` | just the contract: pure helpers, then commit/amend/withdraw/claim/sweep against a storage stub |
 | `npm run check -- --validate` | `genvm-lint` lint + validate + schema |
@@ -349,31 +382,62 @@ lib/format.ts                 wei and clock formatting, all in BigInt
 lib/seal.ts                   the two hashes shared with the contract, and their tests
 contracts/cachet.py           the contract
 contracts/test_helpers.py     244 checks on the pure helpers
-contracts/test_contract.py    102 checks driving it as a state machine
+contracts/test_contract.py    177 checks driving it as a state machine
 contracts/README.md           the design, and 30 errors found in the build brief
 scripts/                      deploy, seed, injection, bidder, status, settle, lint
 ```
 
-## Honest limits
+## What stands between a proposal and an award
 
-Written out properly on `/docs`, in short here:
+Six mechanisms, all of them in the contract, all of them running on every
+round.
 
-- It scores **prose**, not capability. A well written proposal from a weak
-  supplier beats a badly written one from a strong supplier. Criteria demanding
-  verifiable references blunt that as far as anything can.
-- It cannot check whether a claim is **true**. No page is fetched during a
-  round. If a bidder names three references, the network scores that three
-  references were named.
-- Sealed commitments make collusion **harder, not impossible**.
-- A published mistake **cannot be undone**. That is the guarantee, and it means
-  a typo in a criterion ships with it.
-- **Studio is gasless.** Nothing here measures what scoring twenty long
-  proposals costs on a live network. That measurement is a launch blocker.
-- **A payout does not land on Studio.** The contract emits the transfer
-  correctly and is debited by exactly the right amount, but Studio's ledger
-  does not credit an ordinary account from an emitted transfer. A winner there
-  sees the award recorded and their balance unchanged. `/docs#studio` and every
-  awarded round page say so rather than printing "paid".
+1. **A standard that cannot move.** There is no method that edits a criterion
+   or a weight, and no owner override. It applies to typos too, which is why
+   publication is a separate transaction from the gate below.
+2. **A gate before the money.** The network is asked whether each criterion can
+   be scored from a proposal at all, and the verdict is final in both
+   directions, so borderline wording cannot be re-asked until it passes.
+3. **A commitment bound to its bidder.** The sealed digest covers the address,
+   the proposal and a salt together, so nobody can submit under another name
+   and nobody can swap the text after the window shuts.
+4. **One window for everyone.** Reveals are refused early and refused late.
+   Every proposal becomes readable at the same moment, to the buyer as well as
+   to the rivals.
+5. **Grades that have to agree.** Each bid is scored against the frozen text by
+   validators reaching their own answer, and the mark is what they agree on
+   rather than what any one of them returned.
+6. **A scorecard for the losers.** Every bidder gets the same page, per
+   criterion, with the written reason attached - and can bond GEN to have one
+   criterion re-scored by a fresh set.
+
+### What the score is, and is not
+
+The mark is a judgement of the **submitted text against your criteria**, and
+this is stated the same way on `/docs`:
+
+- A well written proposal from a weak supplier will outscore a badly written
+  one from a strong supplier. Criteria demanding named, checkable references
+  pull the mark back towards evidence, and that is the lever a buyer has.
+- No page is fetched during a round, by design: a scoring pass that reached the
+  web would hand every validator a different document and agreement would never
+  settle. A claim is scored as a claim. Checking it is the buyer's step, before
+  the award.
+- Sealed commitments raise the price of collusion rather than removing it.
+  Bidders determined to agree in advance still can, and are scored exactly as
+  faithfully as everyone else.
+
+### What Studio does differently
+
+Two properties of the test network that a reader should not mistake for the
+product:
+
+- **Gas is free there.** Nothing in this repository measures what scoring
+  twenty long proposals costs on a network that charges.
+- **An emitted transfer does not credit an ordinary account.** The contract is
+  debited by exactly the right amount and the award is recorded correctly, but
+  the winner's balance does not move. `/docs#studio` and every awarded round
+  page say that rather than printing "paid".
 
 ## Notes
 
@@ -418,11 +482,16 @@ typography that is the worst possible failure mode: invisible in CI, obvious to
 every reader. A passing build is not evidence the fonts loaded; measure in the
 page instead, where a real face and its fallback render at different widths.
 
-Regenerate the link-preview image after a wordmark or strapline change:
+Regenerate the brand assets after a change to the mark or the palette:
 
 ```bash
-python scripts/og.py
+python scripts/brand.py
 ```
+
+It writes `public/brand/` from the same three colour values the stylesheet
+uses, in the site's own typeface, so an asset cannot drift away from the
+product it represents. The seal doubles as the link preview; there is no
+separate banner to keep in step with it.
 
 The 3D wax seal is
 ported from the handoff's `seal3d.js` to the bundled `three` rather than a CDN

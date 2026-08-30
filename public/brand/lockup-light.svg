@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 72" width="300" height="72" role="img" aria-label="Cachet">
+  <g transform="translate(4 4) scale(0.64)">
+    <circle cx="50" cy="50" r="48" fill="rgb(166, 50, 31)"/>
+    <circle cx="50" cy="50" r="37" fill="none" stroke="rgb(246, 238, 222)" stroke-width="1.6" stroke-dasharray="2 3.6" opacity=".92"/>
+    <text x="50" y="53" text-anchor="middle" dominant-baseline="central" font-family="Archivo, Helvetica, Arial, sans-serif" font-weight="900" font-size="46" fill="rgb(246, 238, 222)">C</text>
+  </g>
+  <text x="82" y="36" dominant-baseline="central" font-family="Archivo, Helvetica, Arial, sans-serif" font-weight="600" font-size="34" letter-spacing="-1" fill="rgb(22, 19, 14)">Cachet</text>
+</svg>

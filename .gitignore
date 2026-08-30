@@ -31,11 +31,21 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 
-# local tooling config (dev-server launch profiles)
-.claude/
+# ---------------------------------------------------------------- not public
+#
+# The repository shows the work. It is not a deployment kit and not a press
+# folder, so everything below stays local.
 
-# internal working notes, not part of the published project
+# Production material. Video prompts, the teaser script and the launch copy are
+# working material for one launch, not part of the project.
+production/
+
+# Runbooks and internal notes. These carry the deployment sequence, the
+# environment variables, the domain setup and the submission write-up. A reader
+# of this repository wants the contract and the site, not the operator's
+# checklist.
+DEPLOY.md
 SUBMISSION.md
 
-# production material, not part of the published site
-production/
+# Editor and assistant config, and dev-server launch profiles
+.claude/

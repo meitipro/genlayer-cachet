@@ -140,6 +140,25 @@ class _Public:
     write = _Write()
 
 
+# One agreed result, handed to the next `run_nondet` call and then cleared.
+#
+# Consensus itself is out of scope here, but everything a method does AROUND it
+# is not: which branch it takes, what it writes, what it returns to. Leaving
+# the whole method untestable is how `resolve_appeal` shipped deciding an
+# appeal on `after != before`, which returned the bond on a re-score that came
+# back lower.
+#
+# Single use on purpose. A value left set would silently satisfy the next
+# method that happened to reach a nondet block, and that test would pass for
+# the wrong reason.
+NONDET_RESULT = None
+
+
+def give_nondet(result):
+    global NONDET_RESULT
+    NONDET_RESULT = result
+
+
 class _Vm(types.ModuleType):
     UserError = StubUserError
 
@@ -149,7 +168,15 @@ class _Vm(types.ModuleType):
 
     @staticmethod
     def run_nondet(*_a, **_k):
-        raise AssertionError("run_nondet is out of scope here; simulate the result instead")
+        global NONDET_RESULT
+        if NONDET_RESULT is None:
+            raise AssertionError(
+                "run_nondet is out of scope here; simulate the result, "
+                "or call give_nondet(...) to drive one call"
+            )
+        out = NONDET_RESULT
+        NONDET_RESULT = None
+        return out
 
 
 TRANSFERS = []
@@ -577,6 +604,189 @@ def test_withdrawn_bid_does_not_block_settlement():
     check("the winner is the revealed bidder", c.rounds[rid].awarded_to, Address(BOB))
     check("the withdrawn bid is still withdrawn", c.rounds[rid].bids[0].status, C.ST_WITHDRAWN)
     check("the withdrawn deposit is not refunded twice", int(c.rounds[rid].bids[0].owed), 100)
+
+
+# --------------------------------------------------------------------------
+# abandonment, and the free option it used to hand a losing bidder
+# --------------------------------------------------------------------------
+
+def test_an_open_appeal_cannot_be_used_to_kill_an_award():
+    """
+    The griefing path, closed.
+
+    `_can_award` is false while an appeal is open, so `expire` used to accept a
+    round that was otherwise ready to pay - and `_settle_deposits` handed the
+    bond straight back. Any scored bidder could therefore cancel the whole
+    tender for the price of gas: appeal after the decision window, expire in
+    the same block, winner never paid.
+    """
+    c = new_contract()
+    rid = open_round(c)
+    a_text = "alice's proposal " + "a" * 60
+    b_text = "bob's proposal " + "b" * 60
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, a_text))
+    at(BOB, 100)
+    c.commit(rid, seal("salt-0002", BOB, b_text))
+
+    at(ALICE, 0, "2026-08-10T06:00:00Z")
+    c.reveal(rid, 0, "salt-0001", a_text)
+    at(BOB, 0)
+    c.reveal(rid, 1, "salt-0002", b_text)
+    simulate_score(c, rid, 0, [5, 5])   # Alice wins
+    simulate_score(c, rid, 1, [1, 1])   # Bob loses
+
+    # Past the decision window, so `expire` is callable and `award` is
+    # permissionless. Bob appeals purely to block the payout.
+    at(BOB, 50, "2026-08-12T00:00:01Z")
+    c.appeal_score(rid, 1, "the second criterion was misread by the scorer")
+    check("the appeal is open", c.rounds[rid].bids[1].appeal_status, C.AP_OPEN)
+
+    refuses(
+        "the award is held while the appeal is open",
+        lambda: c.award(rid),
+        "appeal",
+    )
+    refuses(
+        "and the round cannot be abandoned around it",
+        lambda: c.expire(rid),
+        "appeal",
+    )
+    check("the round is still open", c.rounds[rid].status, C.RS_OPEN)
+    check("the budget is still escrowed", int(c.total_escrowed), int(c.rounds[rid].budget))
+    check("nobody has been paid", c.rounds[rid].awarded_to.as_hex, C.ZERO_ADDRESS)
+
+
+def test_expire_still_rescues_a_round_nobody_can_score():
+    """
+    The hatch the fix above must not close.
+
+    A revealed bid that never reaches agreement is genuinely unscoreable, and
+    without abandonment its escrow is stranded forever.
+    """
+    c = new_contract()
+    rid = open_round(c)
+    text = "alice's proposal " + "a" * 60
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, text))
+    at(ALICE, 0, "2026-08-10T06:00:00Z")
+    c.reveal(rid, 0, "salt-0001", text)
+    # Revealed and never scored: no appeal is involved anywhere.
+
+    at(CAROL, 0, "2026-08-12T00:00:01Z")
+    c.expire(rid)
+    check("the round is abandoned", c.rounds[rid].status, C.RS_DECLINED)
+    check(
+        "and says why, without claiming nothing was scored",
+        c.rounds[rid].decline_reason,
+        C.DECLINE_INCOMPLETE,
+    )
+    check("the bidder who turned up is owed the deposit", int(c.rounds[rid].bids[0].owed), 100)
+    check("the budget stops being counted as held", int(c.total_escrowed), 0)
+
+
+def test_an_appeal_is_upheld_only_by_an_improvement():
+    """
+    The bond has to be at risk, or it is decoration.
+
+    The rule was "upheld if the total moves". `scores_agree` counts a one-step
+    difference on a criterion as agreement, so noise alone returned the bond -
+    and a re-score that came back LOWER was recorded as upheld, which is the
+    bidder's own case failing.
+
+    This drives the real `resolve_appeal`, with the agreed scores handed in.
+    """
+    # Weights are 3 and 2 on the default round, so the original 5/4 totals 23.
+    for label, new_scores, expect_status, expect_owed, expect_forfeit in (
+        ("a higher re-score", [5, 5], C.AP_UPHELD, 50, 0),
+        ("an identical re-score", [5, 4], C.AP_REJECTED, 0, 50),
+        ("a lower re-score", [4, 3], C.AP_REJECTED, 0, 50),
+    ):
+        c = new_contract()
+        rid = open_round(c)
+        text = "alice's proposal " + "a" * 60
+        at(ALICE, 100, "2026-08-08T01:00:00Z")
+        c.commit(rid, seal("salt-0001", ALICE, text))
+        at(ALICE, 0, "2026-08-10T06:00:00Z")
+        c.reveal(rid, 0, "salt-0001", text)
+        simulate_score(c, rid, 0, [5, 4])
+        before = int(c.rounds[rid].bids[0].total)
+
+        at(ALICE, 50, "2026-08-11T00:00:00Z")
+        c.appeal_score(rid, 0, "the second criterion understates the delivery plan")
+
+        give_nondet({
+            "scores": new_scores,
+            "reasons": ["re-scored one", "re-scored two"],
+        })
+        at(CAROL, 0)
+        c.resolve_appeal(rid, 0)
+
+        b = c.rounds[rid].bids[0]
+        check(f"{label}: status", b.appeal_status, expect_status)
+        check(f"{label}: the bond owed back", int(b.owed), expect_owed)
+        check(f"{label}: the bond forfeited", int(c.rounds[rid].forfeited), expect_forfeit)
+        check(f"{label}: the bond is no longer held", int(b.appeal_bond), 0)
+        check(f"{label}: the card is marked re-scored", bool(b.rescored), True)
+        check(f"{label}: the previous total is kept", int(b.appeal_total_before), before)
+
+
+def test_a_settled_round_never_leaves_an_appeal_reading_open():
+    """
+    With `appeal_bond` set to zero in the terms, an appeal is opened holding
+    nothing. The abandonment flag used to sit inside the bond guard, so those
+    appeals stayed AP_OPEN on a round that was already settled.
+    """
+    c = new_contract(appeal_bond=0)
+    rid = open_round(c)
+    text = "alice's proposal " + "a" * 60
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, text))
+    at(ALICE, 0, "2026-08-10T06:00:00Z")
+    c.reveal(rid, 0, "salt-0001", text)
+    simulate_score(c, rid, 0, [5, 4])
+
+    at(ALICE, 0, "2026-08-11T00:00:00Z")
+    c.appeal_score(rid, 0, "the second criterion understates the delivery plan")
+    check("the appeal is open and holds nothing", int(c.rounds[rid].bids[0].appeal_bond), 0)
+
+    # Settle it the only way a round with an open appeal can be settled once
+    # `expire` refuses: resolve first is impossible in the stub, so drive the
+    # settlement helper directly, which is what every exit calls.
+    c._settle_deposits(c.rounds[rid])
+    check(
+        "the appeal does not read as open on a settled round",
+        c.rounds[rid].bids[0].appeal_status,
+        C.AP_ABANDONED,
+    )
+
+
+def test_escrow_falls_on_every_exit():
+    """
+    `total_escrowed` is what the contract holds now, not a lifetime sum.
+
+    It only ever rose, so `/treasury` reported settled budgets as still locked
+    while the per-round list beneath it correctly showed nothing holding.
+    """
+    for action in ("award", "decline"):
+        c = new_contract()
+        rid = open_round(c)
+        budget = int(c.rounds[rid].budget)
+        check(f"{action}: publication escrows the budget", int(c.total_escrowed), budget)
+
+        text = "alice's proposal " + "a" * 60
+        at(ALICE, 100, "2026-08-08T01:00:00Z")
+        c.commit(rid, seal("salt-0001", ALICE, text))
+        at(ALICE, 0, "2026-08-10T06:00:00Z")
+        c.reveal(rid, 0, "salt-0001", text)
+        simulate_score(c, rid, 0, [5, 4])
+
+        at(BUYER, 0, "2026-08-11T06:00:00Z")
+        if action == "award":
+            c.award(rid)
+        else:
+            c.decline(rid, "no bid met the bar")
+        check(f"{action}: the budget stops being held", int(c.total_escrowed), 0)
 
 
 # --------------------------------------------------------------------------

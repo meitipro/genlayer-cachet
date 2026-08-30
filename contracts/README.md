@@ -180,8 +180,26 @@ scored after that window passed could never be appealed, on a scorecard its
 bidder had no way to see earlier. Appeals are now bounded by the round still
 being open, which is the real constraint: `award` refuses while any appeal is
 open, each bid can be appealed once, only by its own bidder, only against a bond
-they forfeit if the total does not move, and resolving is permissionless. The
-delay is bounded and it costs money to cause.
+they forfeit unless the re-score raises the total, and resolving is
+permissionless. The delay is bounded and it costs money to cause.
+
+Both halves of that last sentence were false when first written, and an audit
+before launch found each one.
+
+The bond was recoverable by noise. The rule was "upheld if the total moves",
+while `scores_agree` counts a one-step difference on any criterion as
+agreement - so two runs over identical input could land several points apart
+and return the bond on merit nobody had shown. Worse, a re-score that came back
+LOWER was also recorded as upheld. It now takes an improvement, which is what
+makes a bond a bond.
+
+And the delay was not bounded. `expire` refused only when a round could be
+awarded, and an open appeal is precisely what makes `_can_award` false - so any
+scored bidder could open an appeal after the decision window and abandon the
+whole tender in the next block, recovering the bond in the settlement and
+denying the winner the payout for the price of gas. `expire` now refuses while
+any appeal is open, because resolving one is permissionless and therefore never
+a dead end.
 
 **6. A refused reveal blamed the wrong thing.** A proposal that was merely too
 short was told "reveal does not match the sealed commitment", sending a bidder

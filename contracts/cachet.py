@@ -38,7 +38,7 @@ from dataclasses import dataclass
 # message at all.
 # --------------------------------------------------------------------------
 
-VERSION = "3"
+VERSION = "4"
 """
 Which revision of THIS source a deployed address is running.
 
@@ -855,6 +855,11 @@ class Contract(gl.Contract):
     awards_won: TreeMap[str, u256]
     buyer_rounds: TreeMap[str, DynArray[u256]]
 
+    # What is held RIGHT NOW, not a lifetime sum. It rises at publication and
+    # falls on each of the three exits, so `/treasury` can say "the contract
+    # holds exactly this" and be right. Left as a running total it kept
+    # counting budgets that had already been paid out or returned, and the
+    # stat card contradicted the per-round list directly beneath it.
     total_escrowed: u256
     total_awarded: u256
     total_fees: u256
@@ -937,6 +942,19 @@ class Contract(gl.Contract):
         """
         total = int(index.get(key, u256(0))) + by
         index[key] = u256(total if total > 0 else 0)
+
+    def _release_escrow(self, r: Round) -> None:
+        """
+        This round's budget stops being held.
+
+        Called from every exit that sends the budget back out - award, decline
+        and expire - so `total_escrowed` means what `/treasury` says it means.
+        Floored at zero for the same reason `_bump` is: `u256` is a NewType
+        over int and would store a negative without complaint, then read back
+        as an enormous number.
+        """
+        left = int(self.total_escrowed) - int(r.budget)
+        self.total_escrowed = u256(left if left > 0 else 0)
 
     def _round_at(self, round_id: u256) -> Round:
         idx = int(round_id)
@@ -1046,8 +1064,12 @@ class Contract(gl.Contract):
             if int(b.appeal_bond) > 0:
                 b.owed = u256(int(b.owed) + int(b.appeal_bond))
                 b.appeal_bond = u256(0)
-                if b.appeal_status == AP_OPEN:
-                    b.appeal_status = AP_ABANDONED
+            # Outside the bond guard on purpose. With `appeal_bond` set to zero
+            # in the terms, an appeal is opened holding nothing, and marking it
+            # abandoned only when there was money to return would leave a
+            # settled round reading "appeal open" forever.
+            if b.appeal_status == AP_OPEN:
+                b.appeal_status = AP_ABANDONED
 
     # ------------------------------------------------------------------
     # Publication
@@ -1729,7 +1751,7 @@ class Contract(gl.Contract):
         #
         # This cannot stall a round indefinitely. Each bid may be appealed once
         # (ERR_APPEAL_TWICE), only by its own bidder, only after paying a bond
-        # they forfeit if the total does not move - and resolving is
+        # they forfeit unless the total goes up - and resolving is
         # permissionless, so nobody has to wait for the appellant.
 
         text = " ".join(str(argument).split()).strip()
@@ -1809,7 +1831,26 @@ class Contract(gl.Contract):
         if after != before:
             self._bump(self.bidder_points, b.bidder.as_hex.lower(), after - before)
 
-        if after != before:
+        # UPHELD MEANS THE SCORE WENT UP, not that it moved.
+        #
+        # This was `after != before`, which is wrong in both directions. A
+        # bidder appeals because they believe the mark is too low, so a
+        # re-score that comes back LOWER is their appeal failing - and it was
+        # being recorded as upheld, with the bond returned, on a bid the
+        # network had just marked down.
+        #
+        # It also mattered more than a rare edge case. `scores_agree` lets each
+        # criterion differ by one step and still count as agreement, so the
+        # contract's own rule declares a small movement to be noise; two runs
+        # over identical input can land a few points apart on nothing. Under
+        # `!=` that noise alone returned the bond, which made appealing close
+        # to free and the bond close to decorative.
+        #
+        # Requiring an improvement does not remove the noise, but it stops
+        # noise from paying: half of it now falls the other way, and a bidder
+        # who appeals a fair mark is as likely to lose the bond as to recover
+        # it.
+        if after > before:
             b.appeal_status = AP_UPHELD
             b.owed = u256(int(b.owed) + int(b.appeal_bond))
             self.appeals_upheld = u256(int(self.appeals_upheld) + 1)
@@ -1865,6 +1906,7 @@ class Contract(gl.Contract):
         r.status = RS_AWARDED
         r.settled_at = canon_instant(gl.message_raw["datetime"])
         self._settle_deposits(r)
+        self._release_escrow(r)
 
         key = winner.bidder.as_hex.lower()
         self.awards_won[key] = u256(int(self.awards_won.get(key, u256(0))) + 1)
@@ -1910,6 +1952,7 @@ class Contract(gl.Contract):
         r.decline_reason = reason[:DECLINE_MAX]
         r.settled_at = canon_instant(gl.message_raw["datetime"])
         self._settle_deposits(r)
+        self._release_escrow(r)
         self.rounds_declined = u256(int(self.rounds_declined) + 1)
         self._bump(self.buyer_declined, r.buyer.as_hex.lower(), 1)
 
@@ -1945,12 +1988,41 @@ class Contract(gl.Contract):
             raise gl.vm.UserError(ERR_DECIDE_OPEN)
 
         self._sweep(r, now)
+
+        # AN OPEN APPEAL IS NOT A DEAD END, so it must never qualify a round
+        # for abandonment.
+        #
+        # `_can_award` is false while any appeal is open, which left `expire`
+        # reachable on a round that was otherwise ready to pay - and
+        # `_settle_deposits` then handed the bond straight back. That gave any
+        # scored bidder a free option on the whole tender: open an appeal after
+        # the decision window, call `expire` in the same block, and the winner
+        # is never paid while the appellant is out nothing but gas. It also
+        # walked around the `decide_closes` bound on `decline`, which exists so
+        # a buyer cannot escape an awkward result.
+        #
+        # Resolving is permissionless, so the remedy for an open appeal is to
+        # resolve it, not to abandon the round. Only a revealed bid that nobody
+        # can score genuinely strands a tender, and that case still reaches the
+        # hatch below.
+        for i in range(len(r.bids)):
+            if r.bids[i].appeal_status == AP_OPEN:
+                raise gl.vm.UserError(ERR_APPEAL_OPEN)
+
         if self._can_award(r):
             raise gl.vm.UserError(ERR_CAN_BE_AWARDED)
+
+        # Read BEFORE settling. `_settle_deposits` rewrites appeal_status, so
+        # asking afterwards describes the state this method just produced
+        # rather than the one it was called on - which is how an abandoned
+        # round could be recorded as "no eligible bid was scored" when its bids
+        # had all been scored.
+        complete = self._is_complete(r)
         self._settle_deposits(r)
+        self._release_escrow(r)
 
         r.status = RS_DECLINED
-        r.decline_reason = DECLINE_NO_BIDS if self._is_complete(r) else DECLINE_INCOMPLETE
+        r.decline_reason = DECLINE_NO_BIDS if complete else DECLINE_INCOMPLETE
         r.settled_at = canon_instant(gl.message_raw["datetime"])
         self.rounds_declined = u256(int(self.rounds_declined) + 1)
         self._bump(self.buyer_declined, r.buyer.as_hex.lower(), 1)

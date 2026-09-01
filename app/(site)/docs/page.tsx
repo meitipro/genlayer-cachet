@@ -546,7 +546,7 @@ export default async function DocsPage() {
               ["appeal_score", "Payable, bidder only, once per bid. Holds the award while it is open."],
               ["resolve_appeal", "Permissionless. Re-scores with the argument attached as a claim about the text."],
               ["award", "Buyer first, then permissionless. Refuses while any revealed bid is unscored, while any appeal is open, and until an hour has passed since the last score - so a buyer cannot score and award in the same breath and leave nobody time to contest."],
-              ["decline", "Buyer only, after reveals close and before the decision deadline. Returns the budget and every deposit a bidder who turned up had paid."],
+              ["decline", "Buyer only, after reveals close and before the decision deadline, and not until the appeal window on the last score has closed. Returns the budget and every deposit a bidder who turned up had paid."],
               ["expire", "Permissionless after the decision deadline, on a round that cannot be awarded. Refuses while an appeal is open, because resolving one is permissionless and an unresolved appeal is not a dead end. Returns the budget."],
               ["claim", "Pull a deposit or an upheld appeal bond. Pull rather than push, so one failing transfer cannot hold up a settlement. A withdrawn bid can claim immediately."],
               ["sweep", "Permissionless. Marks commitments that were never opened as expired."],

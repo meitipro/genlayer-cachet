@@ -915,6 +915,59 @@ def test_award_cannot_outrun_the_appeal_window():
     check("and then it awards", c.rounds[rid].status, C.RS_AWARDED)
 
 
+def test_decline_cannot_outrun_the_appeal_window_either():
+    """
+    The other settlement path.
+
+    Guarding only `award` left the door open at the side. A score lands on the
+    bidder's permanent record through `bidder_points` whether the round pays
+    anybody or not, so a buyer who disliked a mark could score low, decline in
+    the next transaction, and leave that bidder holding a score they can no
+    longer contest.
+    """
+    c = new_contract()
+    rid = open_round(c)
+    text = "alice's proposal " + "a" * 60
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, text))
+    at(ALICE, 0, "2026-08-10T06:00:00Z")
+    c.reveal(rid, 0, "salt-0001", text)
+    simulate_score(c, rid, 0, [1, 1], when="2026-08-11T06:00:00Z")
+
+    # The mark is already on the record, which is what makes this worth
+    # contesting even on a round nobody will win.
+    check("the low score is on the bidder's record", int(c.bidder_points[ALICE.lower()]), 4)
+
+    at(BUYER, 0, "2026-08-11T06:00:01Z")
+    refuses(
+        "declining a second after the score is refused",
+        lambda: c.decline(rid, "no bid met the bar"),
+        "appeal window",
+    )
+    check("the round is still open", c.rounds[rid].status, C.RS_OPEN)
+
+    # And the bidder can still act inside the interval, which is the point.
+    at(ALICE, 50, "2026-08-11T06:20:00Z")
+    c.appeal_score(rid, 0, "the first criterion was scored against a section that is present")
+    check("the appeal lands", c.rounds[rid].bids[0].appeal_status, C.AP_OPEN)
+
+    at(BUYER, 0, "2026-08-11T07:30:00Z")
+    refuses(
+        "and an open appeal blocks declining as well",
+        lambda: c.decline(rid, "no bid met the bar"),
+        "appeal",
+    )
+
+    give_nondet({"scores": [1, 1], "reasons": ["unchanged", "unchanged"]})
+    at(CAROL, 0, "2026-08-11T07:40:00Z")
+    c.resolve_appeal(rid, 0)
+
+    at(BUYER, 0, "2026-08-11T08:45:00Z")
+    c.decline(rid, "no bid met the bar")
+    check("then it declines", c.rounds[rid].status, C.RS_DECLINED)
+    check("and the deposit is owed back", int(c.rounds[rid].bids[0].owed), 100)
+
+
 def test_escrow_falls_on_every_exit():
     """
     `total_escrowed` is what the contract holds now, not a lifetime sum.

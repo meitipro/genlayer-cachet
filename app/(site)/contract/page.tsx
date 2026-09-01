@@ -88,7 +88,7 @@ const WRITES: Method[] = [
   {
     name: "decline",
     args: "round_id, why",
-    note: "Returns the budget, and the deposit of every bidder who turned up. A commitment nobody ever opened still forfeits. Never charges the fee.",
+    note: "Returns the budget, and the deposit of every bidder who turned up. A commitment nobody ever opened still forfeits. Never charges the fee. Waits out the same appeal window an award does: a score lands on the bidder record whether the round paid anybody or not.",
   },
   {
     name: "expire",

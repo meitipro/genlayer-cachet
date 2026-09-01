@@ -2021,6 +2021,23 @@ class Contract(gl.Contract):
         self._sweep(r, now)
         self._require_complete(r)
 
+        # DECLINING IS SETTLEMENT TOO, so it waits out the same window.
+        #
+        # Guarding only `award` left the other half of the door open. A score
+        # is not just a ranking: it is added to the bidder's permanent record
+        # through `bidder_points`, and it stays there whether the round paid
+        # anybody or not. A buyer who disliked a mark could therefore score
+        # low, decline in the next transaction, and leave that bidder holding
+        # a score they can no longer contest - `appeal_score` refuses on a
+        # settled round.
+        #
+        # Nothing is stranded by this. If the window runs past `decide_closes`
+        # then declining is simply no longer available, and `expire` returns
+        # the budget after that deadline exactly as it would have.
+        window = self._appeal_window_closes(r)
+        if now < window:
+            raise gl.vm.UserError(ERR_APPEAL_WINDOW)
+
         reason = " ".join(str(why).split()).strip()
         if not reason:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} a declined round needs a reason")

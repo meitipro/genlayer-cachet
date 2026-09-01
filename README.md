@@ -160,7 +160,7 @@ like a real one.
 | `npm run dev` | dev server on port 4100 |
 | `npm run build` | production build - **stop the dev server first**, a concurrent build corrupts `.next` and every route 500s |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | 478 checks: 57 browser, 244 pure helpers, 177 driving the contract as a state machine. No GenVM, no network |
+| `npm test` | 502 checks: 57 browser, 244 pure helpers, 201 driving the contract as a state machine. No GenVM, no network |
 | `npm run test:ui` | just the browser half - formatting, and the two hashes shared with the contract |
 | `npm run test:contract` | just the contract: pure helpers, then commit/amend/withdraw/claim/sweep against a storage stub |
 | `npm run check -- --validate` | `genvm-lint` lint + validate + schema |
@@ -382,7 +382,7 @@ lib/format.ts                 wei and clock formatting, all in BigInt
 lib/seal.ts                   the two hashes shared with the contract, and their tests
 contracts/cachet.py           the contract
 contracts/test_helpers.py     244 checks on the pure helpers
-contracts/test_contract.py    177 checks driving it as a state machine
+contracts/test_contract.py    201 checks driving it as a state machine
 contracts/README.md           the design, and 30 errors found in the build brief
 scripts/                      deploy, seed, injection, bidder, status, settle, lint
 ```

@@ -71,6 +71,7 @@ const WRITES: Method[] = [
     name: "appeal_score",
     args: "round_id, bid_index, argument",
     note: "Once per bid, by its own bidder, against a bond forfeited unless the re-score raises the total.",
+    href: "/rounds",
   },
   {
     name: "resolve_appeal",
@@ -79,7 +80,11 @@ const WRITES: Method[] = [
   },
   { name: "ask", args: "round_id, question", note: "Open to any address. Closes with the commit window." },
   { name: "answer", args: "round_id, question_index, reply", note: "Buyer only, once, and closes with the commit window." },
-  { name: "award", args: "round_id", note: "Buyer first, then anyone once the decision window has passed." },
+  {
+    name: "award",
+    args: "round_id",
+    note: "Buyer first, then anyone once the decision window has passed. Refused until an hour after the last score, so the appeal is reachable rather than merely documented.",
+  },
   {
     name: "decline",
     args: "round_id, why",
@@ -91,7 +96,7 @@ const WRITES: Method[] = [
     note: "Abandons a round that cannot be awarded, so escrow is never stranded. Refuses while an appeal is open: resolving one is permissionless, so that is not a dead end.",
   },
   { name: "sweep", args: "round_id", note: "Marks bids that were never revealed, so the record matches reality." },
-  { name: "claim", args: "round_id, bid_index", note: "Each bidder pulls what they are owed. Nothing is pushed." },
+  { name: "claim", args: "round_id, bid_index", note: "Each bidder pulls what they are owed. Nothing is pushed.", href: "/rounds" },
   {
     name: "collect_forfeits",
     args: "round_id",

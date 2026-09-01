@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import SealPanel from "@/components/SealPanel";
+import BidderActions from "@/components/BidderActions";
 import Clarifications from "@/components/Clarifications";
 import { Countdown, StaleWatch } from "@/components/Live";
 import { CriteriaBlock, RoundTimeline } from "@/components/Round";
@@ -278,6 +279,24 @@ export default async function BidPage({ params }: Props) {
               minLength={LIMITS.proposalMin}
               maxLength={LIMITS.proposalMax}
             />
+
+            {/*
+              One panel per bid on this round, and each renders nothing unless
+              the connected wallet owns it. Rendering server-side and filtering
+              in the client is deliberate: which bid is yours depends on an
+              address only the browser knows, and passing it up would make this
+              page uncacheable for everyone.
+            */}
+            {(bids ?? []).map((b) => (
+              <BidderActions
+                key={b.i}
+                round={round}
+                bid={b}
+                appealWindowCloses={
+                  round.appeal_window_closes ? formatDate(round.appeal_window_closes) : ""
+                }
+              />
+            ))}
           </div>
         </div>
       </section>

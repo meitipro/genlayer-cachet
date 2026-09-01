@@ -300,7 +300,7 @@ def seal(salt, who, text):
     return C.commitment_for(salt, who, text)
 
 
-def simulate_score(c, rid, index, scores):
+def simulate_score(c, rid, index, scores, when="2026-08-10T12:00:00Z"):
     """
     Write the outcome of a successful `score`, without the validators.
 
@@ -318,7 +318,9 @@ def simulate_score(c, rid, index, scores):
         b.reasons.append(f"reason {i}")
     b.total = u256(C.weighted_total(list(scores), weights))
     b.status = C.ST_SCORED
-    b.scored_at = "2026-08-10T12:00:00Z"
+    # Overridable, because the appeal window is measured from it and a test
+    # about that window has to be able to place the score on the clock.
+    b.scored_at = when
     c.bids_scored = u256(int(c.bids_scored) + 1)
     who = b.bidder.as_hex.lower()
     c._bump(c.bidder_scored, who, 1)
@@ -759,6 +761,158 @@ def test_a_settled_round_never_leaves_an_appeal_reading_open():
         c.rounds[rid].bids[0].appeal_status,
         C.AP_ABANDONED,
     )
+
+
+def test_a_bidder_can_run_the_whole_appeal_flow_and_get_the_bond_back():
+    """
+    The bonded appeal, end to end, as money rather than as status.
+
+    Bond in, re-score, bond owed, bond pulled, bond transferred. If any link
+    here is missing the path is documented rather than usable.
+    """
+    c = new_contract()
+    rid = open_round(c)
+    text = "alice's proposal " + "a" * 60
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, text))
+    at(ALICE, 0, "2026-08-10T06:00:00Z")
+    c.reveal(rid, 0, "salt-0001", text)
+    simulate_score(c, rid, 0, [3, 3])
+
+    # The bond leaves the bidder and is held by the round.
+    at(ALICE, 50, "2026-08-10T13:00:00Z")
+    c.appeal_score(rid, 0, "the delivery plan was read as absent when it is on page two")
+    check("the bond is held", int(c.rounds[rid].bids[0].appeal_bond), 50)
+    check("the appeal is open", c.rounds[rid].bids[0].appeal_status, C.AP_OPEN)
+
+    # Anyone can resolve it. The re-score comes back higher, so it is upheld.
+    give_nondet({"scores": [5, 4], "reasons": ["page two does say so", "clear"]})
+    at(CAROL, 0, "2026-08-10T14:00:00Z")
+    c.resolve_appeal(rid, 0)
+    check("upheld", c.rounds[rid].bids[0].appeal_status, C.AP_UPHELD)
+    check("the card carries the new mark", int(c.rounds[rid].bids[0].total), 19)
+    check("and is flagged as re-scored", bool(c.rounds[rid].bids[0].rescored), True)
+    check("the bond is owed back", int(c.rounds[rid].bids[0].owed), 50)
+
+    # Settle, then pull. Award has to wait out the window from the re-score.
+    at(BUYER, 0, "2026-08-11T06:00:00Z")
+    c.award(rid)
+    before = len(TRANSFERS)
+    at(ALICE, 0)
+    c.claim(rid, 0)
+    paid = [t for t in TRANSFERS[before:] if t["to"] == ALICE.lower()]
+    check("one transfer to the bidder", len(paid), 1)
+    check("carrying the bond and the deposit", paid[0]["value"], 150)
+    check("nothing is left owed", int(c.rounds[rid].bids[0].owed), 0)
+    refuses(
+        "and it cannot be pulled twice",
+        lambda: c.claim(rid, 0),
+        "nothing is owed",
+    )
+
+
+def test_a_losing_bidder_can_claim_the_deposit_after_settlement():
+    """
+    The other value flow: a bidder who lost still gets their deposit back, by
+    pulling it themselves.
+    """
+    c = new_contract()
+    rid = open_round(c)
+    a_text = "alice's proposal " + "a" * 60
+    b_text = "bob's proposal " + "b" * 60
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, a_text))
+    at(BOB, 100)
+    c.commit(rid, seal("salt-0002", BOB, b_text))
+    at(ALICE, 0, "2026-08-10T06:00:00Z")
+    c.reveal(rid, 0, "salt-0001", a_text)
+    at(BOB, 0)
+    c.reveal(rid, 1, "salt-0002", b_text)
+    simulate_score(c, rid, 0, [5, 5])
+    simulate_score(c, rid, 1, [2, 2])
+
+    refuses(
+        "a live round holds the deposit",
+        lambda: c.claim(rid, 1),
+        "has not settled",
+    )
+
+    at(BUYER, 0, "2026-08-11T06:00:00Z")
+    c.award(rid)
+    check("alice won", c.rounds[rid].awarded_to, Address(ALICE))
+    check("bob is owed his deposit", int(c.rounds[rid].bids[1].owed), 100)
+
+    before = len(TRANSFERS)
+    at(BOB, 0)
+    c.claim(rid, 1)
+    paid = [t for t in TRANSFERS[before:] if t["to"] == BOB.lower()]
+    check("the losing bidder is paid", len(paid), 1)
+    check("the full deposit", paid[0]["value"], 100)
+
+
+def test_award_cannot_outrun_the_appeal_window():
+    """
+    The appeal has to be reachable, not merely documented.
+
+    Scoring is permissionless and has no deadline, so without this a buyer
+    scores the last bid and awards in the next transaction - and appeal_score
+    starts refusing because the round is settled. The bidder never had an
+    interval in which to read their card.
+    """
+    c = new_contract()
+    rid = open_round(c)
+    text = "alice's proposal " + "a" * 60
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, text))
+    at(ALICE, 0, "2026-08-10T06:00:00Z")
+    c.reveal(rid, 0, "salt-0001", text)
+
+    # Scored at noon, so the window closes at 13:00.
+    simulate_score(c, rid, 0, [4, 4], when="2026-08-11T06:00:00Z")
+    check("the round publishes when the window shuts",
+          json.loads(c.round(rid))["appeal_window_closes"], "2026-08-11T07:00:00Z")
+
+    at(BUYER, 0, "2026-08-11T06:00:01Z")
+    refuses(
+        "awarding a second after the score is refused",
+        lambda: c.award(rid),
+        "appeal window",
+    )
+    at(BUYER, 0, "2026-08-11T06:59:59Z")
+    refuses(
+        "and one second before the window shuts",
+        lambda: c.award(rid),
+        "appeal window",
+    )
+    # The bidder still has the path open in that interval, which is the point.
+    at(ALICE, 50, "2026-08-11T06:30:00Z")
+    c.appeal_score(rid, 0, "the second criterion was read against the wrong section")
+    check("the appeal lands inside the window", c.rounds[rid].bids[0].appeal_status, C.AP_OPEN)
+
+    at(BUYER, 0, "2026-08-11T07:00:00Z")
+    refuses(
+        "and an open appeal still blocks the award after it",
+        lambda: c.award(rid),
+        "appeal",
+    )
+
+    give_nondet({"scores": [4, 4], "reasons": ["unchanged", "unchanged"]})
+    at(CAROL, 0, "2026-08-11T07:10:00Z")
+    c.resolve_appeal(rid, 0)
+    check("rejected, so the bond pays for the re-scoring",
+          c.rounds[rid].bids[0].appeal_status, C.AP_REJECTED)
+    check("and is forfeited to the round", int(c.rounds[rid].forfeited), 50)
+
+    # The re-score restarts the window: a new mark deserves the same interval.
+    at(BUYER, 0, "2026-08-11T07:20:00Z")
+    refuses(
+        "the re-score restarts the window",
+        lambda: c.award(rid),
+        "appeal window",
+    )
+    at(BUYER, 0, "2026-08-11T08:20:00Z")
+    c.award(rid)
+    check("and then it awards", c.rounds[rid].status, C.RS_AWARDED)
 
 
 def test_escrow_falls_on_every_exit():

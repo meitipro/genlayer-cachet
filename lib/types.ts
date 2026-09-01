@@ -41,6 +41,14 @@ export interface Round {
   commit_closes: string;
   reveal_closes: string;
   decide_closes: string;
+  /**
+   * When an award becomes possible: the last score plus the appeal window.
+   *
+   * Empty while nothing is scored. Computed by the contract rather than here,
+   * so the countdown a bidder reads is the same arithmetic `award` refuses
+   * against, not a second implementation of the same rule that could drift.
+   */
+  appeal_window_closes: string;
   eligibility: string;
   primary_index: number;
   max_bids: number;

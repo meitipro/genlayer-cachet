@@ -2829,3 +2829,35 @@ textarea {
 .rule-table tr:last-child td {
   border-bottom: 0;
 }
+
+/* --------------------------------------------------------------------------
+   The bidder's two value paths: pull what is owed, contest the mark.
+
+   Laid out as a row that becomes a stack, because the claim amount and its
+   button belong side by side on a desktop and one above the other on a phone -
+   and `min-width: 0` on the text column so a long note wraps rather than
+   pushing the button off screen, which is how this grid overflows at 320.
+   -------------------------------------------------------------------------- */
+.bidder-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.bidder-row > div {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+.bidder-appeal {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ink-line);
+}
+.bidder-appeal .field {
+  margin: 12px 0 14px;
+}
+.note-bad {
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}

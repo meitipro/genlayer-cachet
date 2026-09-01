@@ -38,7 +38,7 @@ from dataclasses import dataclass
 # message at all.
 # --------------------------------------------------------------------------
 
-VERSION = "4"
+VERSION = "5"
 """
 Which revision of THIS source a deployed address is running.
 
@@ -66,6 +66,9 @@ ERR_NOT_BIDDER = f"{ERROR_EXPECTED} only the bidder may do this"
 ERR_ROUND_SETTLED = f"{ERROR_EXPECTED} this round is already settled"
 ERR_UNSCORED = f"{ERROR_EXPECTED} every revealed bid must be scored first"
 ERR_APPEAL_OPEN = f"{ERROR_EXPECTED} an appeal is open on this round"
+ERR_APPEAL_WINDOW = (
+    f"{ERROR_EXPECTED} the appeal window on the last scored bid has not closed yet"
+)
 ERR_NO_SCORED_BID = f"{ERROR_EXPECTED} no bid was scored, so there is nothing to award"
 ERR_CAN_BE_AWARDED = f"{ERROR_EXPECTED} this round is complete and can be awarded, so it cannot be abandoned"
 ERR_REVEAL_EARLY = f"{ERROR_EXPECTED} the reveal window has not opened"
@@ -136,6 +139,26 @@ ARGUMENT_MAX = 600
 ARGUMENT_MIN = 20
 DECLINE_MAX = 300
 BIDS_MAX_CAP = 64
+
+APPEAL_WINDOW = 3600
+"""
+How long an award waits after the last score lands, in seconds.
+
+Without it the appeal is a promise the contract does not keep. Scoring is
+permissionless and has no deadline, so a buyer could score the final bid and
+award in the very next transaction - and a bidder whose card had just appeared
+would have had no interval in which to read it, let alone bond against it.
+`appeal_score` refuses once the round is settled, so the opportunity would be
+gone before anyone could see it existed.
+
+Measured from the LAST scored_at rather than from the reveal deadline, because
+that is the moment the last scorecard became readable. Anchoring it to the
+reveal window instead would let a buyer wait out the hour and then score and
+award together, which is the same hole with more steps.
+
+Deterministic: it is derived from state the contract already stores, so every
+validator computes the same instant from the same round.
+"""
 # Clarifications. Capped per round AND per asker: the answer is published to
 # everyone, so one address flooding the queue costs every other bidder the
 # buyer's attention, and the loop that reads them has to stay bounded.
@@ -284,7 +307,18 @@ def parse_instant(text: str) -> int:
 
 def canon_instant(text: str) -> str:
     """The same instant spelled one way, so stored windows are comparable as text too."""
-    secs = parse_instant(text)
+    return instant_text(parse_instant(text))
+
+
+def instant_text(secs: int) -> str:
+    """
+    Seconds since the epoch, as the one spelling this contract stores.
+
+    Split out of `canon_instant` so a computed instant - the close of an appeal
+    window, which exists only as arithmetic - can be published in exactly the
+    same form as a stored one, rather than through a second implementation
+    that would eventually disagree with this one.
+    """
     days, rem = divmod(secs, 86400)
     # civil_from_days, the inverse of days_from_civil.
     z = days + 719468
@@ -1029,6 +1063,33 @@ class Contract(gl.Contract):
 
     def _can_award(self, r: Round) -> bool:
         return self._is_complete(r) and len(self._scored_rows(r)) > 0
+
+    def _appeal_window_closes(self, r: Round) -> int:
+        """
+        The instant an award becomes possible: the last score plus the window.
+
+        Zero when nothing has been scored, so a round with no scorecards is
+        governed by its other guards rather than by this one.
+
+        `resolve_appeal` rewrites `scored_at`, so re-scoring on appeal restarts
+        the window. That is deliberate and not an oversight: a re-scored card
+        is a new mark, and a bidder ranked below it needs the same interval to
+        read it that they had for the first one.
+        """
+        latest = 0
+        for i in range(len(r.bids)):
+            b = r.bids[i]
+            if b.status != ST_SCORED:
+                continue
+            stamp = str(b.scored_at)
+            if not stamp:
+                continue
+            at = parse_instant(stamp)
+            if at > latest:
+                latest = at
+        if latest == 0:
+            return 0
+        return latest + APPEAL_WINDOW
 
     def _scored_rows(self, r: Round) -> list:
         rows = []
@@ -1894,6 +1955,22 @@ class Contract(gl.Contract):
         if not rows:
             raise gl.vm.UserError(ERR_NO_SCORED_BID)
 
+        # THE APPEAL HAS TO BE REACHABLE, not merely documented.
+        #
+        # `_require_complete` already refuses while an appeal is OPEN. This is
+        # the other half: it refuses while an appeal is still POSSIBLE. Without
+        # it a buyer scores the last bid and awards in the next transaction,
+        # `appeal_score` starts refusing because the round is settled, and the
+        # appeal path is unreachable on every round anybody actually runs.
+        #
+        # Bounded, so it cannot become a way to strand an escrow: the window is
+        # a fixed hour from the last score, it applies to the buyer and to the
+        # permissionless caller alike, and `expire` remains available after the
+        # decision window for a round that genuinely cannot settle.
+        window = self._appeal_window_closes(r)
+        if now < window:
+            raise gl.vm.UserError(ERR_APPEAL_WINDOW)
+
         best = rank_bids(rows, int(r.primary_index))[0]
         winner = r.bids[int(best["order"])]
 
@@ -2155,6 +2232,7 @@ class Contract(gl.Contract):
                 "criteria_max": CRITERIA_MAX,
                 "proposal_max": PROPOSAL_MAX,
                 "bids_max": BIDS_MAX_CAP,
+                "appeal_window": APPEAL_WINDOW,
             },
             separators=(",", ":"),
         )
@@ -2491,6 +2569,16 @@ class Contract(gl.Contract):
             "primary_index": int(r.primary_index),
             "max_bids": int(r.max_bids),
             "criteria_hash": str(r.criteria_hash),
+            # When an award becomes possible, as an instant rather than as a
+            # rule the reader has to apply themselves. Empty while nothing is
+            # scored. The bid page counts down against it so a bidder can see
+            # how long they have to appeal, instead of finding out by having an
+            # award land on them.
+            "appeal_window_closes": (
+                instant_text(self._appeal_window_closes(r))
+                if self._appeal_window_closes(r) > 0
+                else ""
+            ),
             "status": str(r.status),
             "awarded_to": r.awarded_to.as_hex if r.status == RS_AWARDED else "",
             "awarded_total": int(r.awarded_total),

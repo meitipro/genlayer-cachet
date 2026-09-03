@@ -133,14 +133,23 @@ export default async function RoundPage({ params }: Props) {
             </div>
             <div className="stack-tight" style={{ alignItems: "flex-end" }}>
               <StatusTag round={round} now={now} />
-              {/* The one action this page owes a reader who came to bid. It is
-                  the same button in both windows because sealing and opening a
-                  seal are the same screen, in sequence. */}
-              {phase === "commit" || phase === "reveal" ? (
-                <Link href={`/bid/${round.id}`} className="btn btn-primary btn-small">
-                  {phase === "commit" ? "Seal a proposal" : "Open your seal"}
-                </Link>
-              ) : null}
+              {/* The one action this page owes a reader who came to bid.
+                  Sealing and opening a seal are the same screen in sequence,
+                  and so are the two things that come after: contesting a mark
+                  and pulling what you are owed.
+
+                  This used to appear only in the commit and reveal windows,
+                  which put the appeal and the claim on a page nobody could
+                  navigate to at the moment they needed either. An appeal
+                  happens after scoring and a claim after settlement, so a
+                  bidder would have had to type the URL. */}
+              <Link href={`/bid/${round.id}`} className="btn btn-primary btn-small">
+                {phase === "commit"
+                  ? "Seal a proposal"
+                  : phase === "reveal"
+                    ? "Open your seal"
+                    : "Your bid"}
+              </Link>
             </div>
           </div>
 

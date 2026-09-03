@@ -125,11 +125,15 @@ export default async function BidPage({ params }: Props) {
               maxWidth: "20ch",
             }}
           >
+            {/* "This round has closed" was true and unhelpful: it is also the
+                heading over the panel where a bidder contests a mark or pulls
+                a deposit, and a page that opens by saying there is nothing to
+                do here reads as a dead end. */}
             {phase === "commit"
               ? "Seal a proposal"
               : phase === "reveal"
                 ? "Open your seal"
-                : "This round has closed"}
+                : "Your bid on this round"}
           </h1>
           <p
             style={{

@@ -153,6 +153,15 @@ export default function MyBids() {
                       <Link href={`/r/${r.id}/b/${r.mine.i}`} className="btn btn-ghost btn-small">
                         {r.mine.status === "scored" ? "Scorecard" : "View bid"}
                       </Link>
+                      {/* The screen that can ACT, beside the one that reads.
+                          This list is where a bidder comes looking for their
+                          own bids, and it is where they will look to pull a
+                          deposit or bond against a mark - so without this the
+                          two value paths were reachable only by typing a URL
+                          nothing on the site links to. */}
+                      <Link href={`/bid/${r.id}`} className="btn btn-ghost btn-small">
+                        {r.mine.status === "sealed" ? "Amend or open" : "Appeal or claim"}
+                      </Link>
                     </>
                   ) : (
                     <>

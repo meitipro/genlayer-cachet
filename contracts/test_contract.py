@@ -915,6 +915,74 @@ def test_award_cannot_outrun_the_appeal_window():
     check("and then it awards", c.rounds[rid].status, C.RS_AWARDED)
 
 
+def test_an_upheld_bond_is_owed_before_it_is_claimable():
+    """
+    The state a claim button gets wrong if it trusts the amount alone.
+
+    `resolve_appeal` runs while the round is OPEN, and an upheld appeal credits
+    the bond back there and then. So a bidder is owed something on a live
+    round - and `claim` still refuses, because nothing is paid out of a round
+    that has not settled. Anything reading `owed > 0` as "claimable" offers a
+    button that always fails, at the moment the bidder is most certain they are
+    owed money.
+    """
+    c = new_contract()
+    rid = open_round(c)
+    text = "alice's proposal " + "a" * 60
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, text))
+    at(ALICE, 0, "2026-08-10T06:00:00Z")
+    c.reveal(rid, 0, "salt-0001", text)
+    simulate_score(c, rid, 0, [3, 3], when="2026-08-11T06:00:00Z")
+
+    at(ALICE, 50, "2026-08-11T06:10:00Z")
+    c.appeal_score(rid, 0, "the delivery plan is on page two and was read as absent")
+    give_nondet({"scores": [5, 4], "reasons": ["found it", "clear"]})
+    at(CAROL, 0, "2026-08-11T06:20:00Z")
+    c.resolve_appeal(rid, 0)
+
+    check("the appeal was upheld", c.rounds[rid].bids[0].appeal_status, C.AP_UPHELD)
+    check("the bond is already owed", int(c.rounds[rid].bids[0].owed), 50)
+    check("on a round that is still open", c.rounds[rid].status, C.RS_OPEN)
+    refuses(
+        "and it cannot be pulled yet",
+        lambda: c.claim(rid, 0),
+        "has not settled",
+    )
+
+    # It becomes claimable at settlement, with the deposit alongside it.
+    at(BUYER, 0, "2026-08-11T07:30:00Z")
+    c.award(rid)
+    check("settlement adds the deposit", int(c.rounds[rid].bids[0].owed), 150)
+    at(ALICE, 0)
+    c.claim(rid, 0)
+    check("and then it pays", int(c.rounds[rid].bids[0].owed), 0)
+
+
+def test_a_withdrawn_bid_can_claim_while_the_round_is_still_open():
+    """
+    The documented exception, pinned so the screen can rely on it.
+
+    A withdrawn bid left the round, so nothing later changes what it is owed
+    and making that bidder wait for a decision they are no longer part of would
+    hold their deposit for a window they walked away from.
+    """
+    c = new_contract()
+    rid = open_round(c)
+    at(ALICE, 100, "2026-08-08T01:00:00Z")
+    c.commit(rid, seal("salt-0001", ALICE, "a" * 60))
+    at(ALICE, 0, "2026-08-09T00:00:00Z")
+    c.withdraw(rid, 0)
+
+    check("the round is still open", c.rounds[rid].status, C.RS_OPEN)
+    check("and the deposit is owed", int(c.rounds[rid].bids[0].owed), 100)
+    before = len(TRANSFERS)
+    c.claim(rid, 0)
+    paid = [t for t in TRANSFERS[before:] if t["to"] == ALICE.lower()]
+    check("it pays immediately", len(paid), 1)
+    check("the whole deposit", paid[0]["value"], 100)
+
+
 def test_decline_cannot_outrun_the_appeal_window_either():
     """
     The other settlement path.

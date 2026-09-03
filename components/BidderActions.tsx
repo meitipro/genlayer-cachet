@@ -56,6 +56,23 @@ export default function BidderActions({
   const owed = BigInt(bid.owed || "0");
 
   /**
+   * Whether `claim` would actually be accepted, mirroring the contract's rule
+   * rather than guessing from the amount.
+   *
+   * `owed > 0` is not enough, and the gap is not theoretical: an upheld appeal
+   * credits the bond back through `resolve_appeal`, which runs while the round
+   * is still OPEN. So a bidder who has just won an appeal sees a balance owed,
+   * and `claim` refuses them with ERR_ROUND_LIVE - an enabled button that
+   * always fails, at the one moment the bidder is most sure they are owed
+   * something.
+   *
+   * A withdrawn bid is the documented exception: it left the round, so nothing
+   * later can change what it is owed and it does not wait for a decision.
+   */
+  const heldByLiveRound = round.status === "open" && bid.status !== "withdrawn";
+  const claimable = owed > 0n && !heldByLiveRound;
+
+  /**
    * Whether an appeal is still possible, decided the way the contract decides
    * it rather than by a rule restated here.
    *
@@ -153,17 +170,19 @@ export default function BidderActions({
               {formatGen(bid.owed)} <span className="stat-unit">GEN</span>
             </div>
             <p className="panel-note">
-              {owed > 0n
-                ? "Your deposit, and an appeal bond if one was upheld. Pull rather than push, so one failing transfer cannot hold up the settlement."
-                : round.status === "open" && bid.status !== "withdrawn"
-                  ? "Nothing to pull yet. A deposit is returned when the round settles, and immediately if you withdraw before the window shuts."
-                  : "Nothing outstanding on this bid."}
+              {owed > 0n && heldByLiveRound
+                ? "Credited to you, and held until this round settles. An upheld appeal returns its bond here straight away, but the contract pays nothing out of a live round - so this arrives with the award or the decline."
+                : claimable
+                  ? "Your deposit, and an appeal bond if one was upheld. Pull rather than push, so one failing transfer cannot hold up the settlement."
+                  : heldByLiveRound
+                    ? "Nothing to pull yet. A deposit is returned when the round settles, and immediately if you withdraw before the window shuts."
+                    : "Nothing outstanding on this bid."}
             </p>
           </div>
           <button
             type="button"
             className="btn btn-primary"
-            disabled={owed <= 0n || busy !== null}
+            disabled={!claimable || busy !== null}
             onClick={() => send("claim")}
           >
             {busy === "claim" ? "Claiming" : "Claim"}

@@ -720,6 +720,35 @@ async function main() {
     record("a bid can still be scored after the reveal window closes", ok(out), out.refusal);
   });
 
+  // -- the appeal window ---------------------------------------------------
+  //
+  // The last score has just landed, so an award is refused until the appeal
+  // window on it closes. That refusal is worth proving on chain rather than
+  // waiting through in silence: it is the whole reason a bidder can contest a
+  // mark at all, and before it existed a buyer could score and award in the
+  // same breath.
+  await step("award:window", async () => {
+    console.log("\n  the appeal window on the last score is still open");
+    await expectRefusal(
+      buyerClient,
+      "award",
+      [roundId],
+      0n,
+      "awarding inside the appeal window is refused",
+      "appeal window",
+    );
+  });
+
+  // Then wait it out. `countdown` prints progress, which matters on a wait
+  // this long, because a silent script looks hung. Fifteen seconds past the
+  // instant, since the contract compares against its own clock rather than
+  // this machine's.
+  const afterScore = await read(buyerClient, "round", [roundId]);
+  const closesAt = Date.parse(afterScore.appeal_window_closes);
+  if (Number.isFinite(closesAt)) {
+    await countdown("the appeal window on the last score to close", closesAt + 15_000);
+  }
+
   // -- the award -----------------------------------------------------------
 
   await step("award", async () => {

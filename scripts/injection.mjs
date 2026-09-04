@@ -271,6 +271,14 @@ async function main() {
 
   await countdown("the reveal window to close", revealAt);
 
+  // The last score has just landed, so an award is refused until the appeal
+  // window on it closes. Waiting it out here rather than failing at the award.
+  const scored = await read(buyerClient, "round", [id]);
+  const appealCloses = Date.parse(scored.appeal_window_closes);
+  if (Number.isFinite(appealCloses)) {
+    await countdown("the appeal window on the last score to close", appealCloses + 15_000);
+  }
+
   await step("award", async () => {
     console.log("\n  awarding");
     const out = await write(buyerClient, "award", [id], 0n, "award");

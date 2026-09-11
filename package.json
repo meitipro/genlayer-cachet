@@ -18,6 +18,7 @@
     "seed": "node scripts/seed.mjs",
     "status": "node scripts/status.mjs",
     "settle": "node scripts/settle.mjs",
+    "terms": "node scripts/terms.mjs",
     "injection": "node scripts/injection.mjs",
     "bidder": "node scripts/bidder.mjs"
   },

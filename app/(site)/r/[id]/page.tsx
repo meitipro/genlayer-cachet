@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import Clarifications from "@/components/Clarifications";
+import RoundActions from "@/components/RoundActions";
 import { Countdown, StaleWatch } from "@/components/Live";
 import { CriteriaBlock, RoundTimeline, Scorecard, StatusTag } from "@/components/Round";
 import { NotConfigured, Unreachable } from "@/components/Shell";
@@ -319,6 +320,18 @@ export default async function RoundPage({ params }: Props) {
               opens. What a buyer cannot do is decline before every revealed bid has been scored,
               or sit past the decision window - after that the round settles without them.
             </div>
+          </div>
+        </section>
+      ) : null}
+
+      {/* Settlement. Rendered for every open round past its commit window and
+          left to decide for itself what to offer, because what is available
+          depends on the reader's wallet and the reader's clock, and neither is
+          known here. */}
+      {round.status === "open" && phase !== "commit" ? (
+        <section className="section-tight on-cream">
+          <div className="shell">
+            <RoundActions round={round} bids={bidsUnread ? [] : rows} />
           </div>
         </section>
       ) : null}

@@ -2861,3 +2861,17 @@ textarea {
   border-color: var(--accent);
   color: var(--accent-fg);
 }
+
+/* Settlement controls on the round page. Each action is its own group, and
+   only a group that follows another carries a rule, so a panel holding one
+   control has no stray line above it. */
+.settle-group {
+  margin-top: 16px;
+}
+.settle-group + .settle-group {
+  padding-top: 16px;
+  border-top: 1px solid var(--ink-line);
+}
+.settle-group .field {
+  margin: 10px 0 12px;
+}
